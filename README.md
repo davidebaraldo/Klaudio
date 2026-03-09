@@ -21,6 +21,7 @@
   <a href="#-quick-start">Quick Start</a> &middot;
   <a href="ROADMAP.md">Roadmap</a> &middot;
   <a href="CONTRIBUTING.md">Contributing</a> &middot;
+  <a href="RELEASES.md">Release Process</a> &middot;
   <a href="#-api-reference">API</a> &middot;
   <a href="https://github.com/davidebaraldo/Klaudio/releases">Releases</a>
 </p>
