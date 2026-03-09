@@ -56,7 +56,7 @@ jobs:
             ./cmd/klaudio
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: klaudio-${{ matrix.os }}-${{ matrix.arch }}
           path: klaudio-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
