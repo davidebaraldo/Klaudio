@@ -19,12 +19,25 @@ import (
 	"github.com/klaudio-ai/klaudio/internal/task"
 )
 
+// version is set at build time via ldflags:
+//
+//	go build -ldflags "-X main.version=v0.1.0"
+var version = "dev"
+
 func main() {
+	// Handle --version flag
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Println("klaudio", version)
+		return
+	}
+
 	// Configure structured logging
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
 	slog.SetDefault(logger)
+
+	slog.Info("starting klaudio", "version", version)
 
 	if err := run(); err != nil {
 		slog.Error("fatal error", "error", err)

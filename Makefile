@@ -4,9 +4,12 @@
 BINARY := klaudio
 BUILD_DIR := bin
 
+# Version (from git tag, or "dev")
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+
 # Go parameters
 GOFLAGS := -trimpath
-LDFLAGS := -s -w
+LDFLAGS := -s -w -X main.version=$(VERSION)
 
 # Directories
 FRONTEND_SRC := web
