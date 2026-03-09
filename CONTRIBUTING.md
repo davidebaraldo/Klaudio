@@ -1,114 +1,116 @@
 # Contributing to Klaudio
 
-Thank you for your interest in contributing to Klaudio! This document provides guidelines for contributing to the project.
+Thank you for your interest in contributing! Whether it's a bug report, feature request, documentation improvement, or code contribution — every bit helps.
 
 ## Getting Started
 
 ### Prerequisites
 
-- Go 1.22+
-- Docker Engine
-- Node.js 20+
-- A Claude Code Max account (for testing agent execution)
+| Tool | Version | Notes |
+|------|---------|-------|
+| Go | 1.22+ | Backend |
+| Docker Engine | Latest | Agent containers |
+| Node.js | 20+ | Frontend build |
+| Claude Code Max | — | Required for agent execution |
 
-### Setup
+### Local Setup
 
 ```bash
-# Clone the repository
-git clone https://github.com/klaudio-ai/klaudio.git
-cd klaudio
+# 1. Clone and enter the repository
+git clone https://github.com/davidebaraldo/Klaudio.git
+cd Klaudio
 
-# Install Go dependencies
+# 2. Install Go dependencies
 go mod tidy
 
-# Build the agent Docker image
+# 3. Build the agent Docker image
 make docker-build
 
-# Build and run the backend
-make run
+# 4. Start the backend
+make dev
 
-# In a separate terminal, start the web UI
-cd web
-npm install
-npm run dev
+# 5. (Optional) Start the frontend dev server
+cd web && npm install && npm run dev
 ```
 
-## Development Guidelines
+The API runs at `http://localhost:8080`, the dev UI at `http://localhost:5173`.
 
-### Code Style
+---
 
-**Go backend:**
-- Follow standard Go conventions (`gofmt`, `go vet`)
-- All I/O functions must accept `context.Context` as the first parameter
-- Wrap errors with context: `fmt.Errorf("doing X: %w", err)`
-- Use `log/slog` for structured logging
-- No global state — pass dependencies via structs
-- No CGO — we use modernc.org/sqlite (pure Go)
-- Hand-written SQL queries in `internal/db/queries.go`
+## How to Contribute
 
-**Frontend:**
-- SvelteKit 2 with Svelte 5 runes syntax
-- Tailwind CSS for styling
-- TypeScript for type safety
+### Reporting Bugs
 
-### Project Structure
+Open an [issue](https://github.com/davidebaraldo/Klaudio/issues/new) with:
 
-```
-internal/
-  api/       # HTTP handlers (add new endpoints here)
-  agent/     # Agent pool management
-  config/    # Configuration
-  db/        # Database queries and models
-  docker/    # Docker container management
-  files/     # File operations
-  repo/      # Git and platform integrations
-  state/     # Checkpoint and state management
-  stream/    # Real-time streaming
-  task/      # Core orchestration logic
-```
+- Go/Docker/Node.js versions
+- OS and architecture
+- Steps to reproduce
+- Expected vs actual behavior
+- Relevant log output (use code blocks)
 
-### Database Changes
+### Suggesting Features
 
-1. Create a new migration file in `migrations/` (e.g., `006_your_feature.sql`)
-2. Add corresponding model structs in `internal/db/models.go`
-3. Add query methods in `internal/db/queries.go`
-4. Migrations run automatically on server startup
+Start a [discussion](https://github.com/davidebaraldo/Klaudio/discussions) or open an issue tagged `enhancement`. Describe the use case, not just the solution.
 
-### Adding API Endpoints
+### Submitting Code
 
-1. Add the handler function in the appropriate file under `internal/api/`
-2. Register the route in `internal/api/router.go`
+1. Fork the repo and create a branch from `main`
+2. Make your changes
+3. Ensure `make build` and `make test` pass
+4. Submit a Pull Request with a clear description
 
-## Making Changes
+---
+
+## Code Style
+
+### Go Backend
+
+| Rule | Details |
+|------|---------|
+| Formatting | `gofmt` / `go vet` — enforced in CI |
+| Context | All I/O functions accept `context.Context` as the first parameter |
+| Errors | Always wrap: `fmt.Errorf("doing X: %w", err)` |
+| Logging | `log/slog` — structured, never `fmt.Println` |
+| State | No global state — dependencies passed via structs |
+| CGO | **Never** — we use `modernc.org/sqlite` (pure Go) |
+| SQL | Hand-written queries in `internal/db/queries.go` |
+
+### Frontend
+
+| Rule | Details |
+|------|---------|
+| Framework | SvelteKit 2 + Svelte 5 runes syntax |
+| Styling | Tailwind CSS utility classes |
+| Types | TypeScript everywhere |
+
+---
+
+## Branch & Commit Conventions
 
 ### Branch Naming
 
-- `feature/description` — New features
-- `fix/description` — Bug fixes
-- `docs/description` — Documentation changes
-- `refactor/description` — Code refactoring
+```
+feature/short-description
+fix/short-description
+docs/short-description
+refactor/short-description
+```
 
 ### Commit Messages
 
-Use clear, concise commit messages:
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
 feat: add GitHub PR creation support
 fix: resolve WebSocket reconnection on network change
-docs: update API spec with new team template endpoints
+docs: update API reference with team template endpoints
 refactor: extract platform interface from bitbucket client
 ```
 
-### Pull Requests
+---
 
-1. Create a branch from `main`
-2. Make your changes
-3. Ensure `make build` succeeds
-4. Ensure `make test` passes
-5. Update documentation if needed
-6. Submit a PR with a clear description of the changes
-
-## Areas for Contribution
+## Where to Contribute
 
 ### Good First Issues
 
@@ -116,34 +118,35 @@ refactor: extract platform interface from bitbucket client
 - Improve error messages and logging
 - Add input validation to API endpoints
 - Fix UI bugs or improve styling
+- Improve documentation
 
 ### Larger Features
 
-- **Phase 7: Multi-platform Git** — GitHub and GitLab integration (see [ROADMAP.md](ROADMAP.md))
-- **UI: Agent grid view** — Split-screen terminal view for multiple agents
-- **UI: Dependency graph** — Visual DAG of subtask dependencies
-- **E2E tests** — Automated integration tests
+Check the [Roadmap](ROADMAP.md) for planned work:
 
-### Documentation
+- **Phase 7** — GitHub and GitLab integration
+- **Phase 8** — Service installation (Windows/Linux)
+- **Agent grid UI** — Split-screen terminal for multiple agents
+- **Dependency graph** — Visual DAG of subtask dependencies
 
-- Improve API docs with more examples
-- Add architecture decision records (ADRs)
-- Write user guides and tutorials
+### Adding Database Changes
 
-## Reporting Issues
+1. Create a migration in `migrations/` (e.g., `006_your_feature.sql`)
+2. Add model structs in `internal/db/models.go`
+3. Add queries in `internal/db/queries.go`
+4. Migrations run automatically on startup
 
-When reporting bugs, please include:
-- Go version (`go version`)
-- Docker version (`docker --version`)
-- OS and architecture
-- Steps to reproduce
-- Expected vs actual behavior
-- Relevant log output
+### Adding API Endpoints
+
+1. Add handler in the appropriate file under `internal/api/`
+2. Register the route in `internal/api/router.go`
+
+---
 
 ## Code of Conduct
 
-Be respectful, inclusive, and constructive. We're all here to build something great together.
+Be respectful, inclusive, and constructive. We're building something great together.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the Apache License 2.0.
+By contributing, you agree that your contributions will be licensed under the [Apache License 2.0](LICENSE).

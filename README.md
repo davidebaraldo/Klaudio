@@ -2,28 +2,58 @@
   <img src="web/src/lib/assets/klaudio-logo.svg" alt="Klaudio" width="400" />
 </p>
 
+<h3 align="center">AI Agent Orchestrator</h3>
+
 <p align="center">
-  <strong>AI Agent Orchestrator</strong> — Launch teams of Claude Code agents in Docker containers to execute complex software development tasks.
+  Launch teams of Claude Code agents in Docker containers.<br/>
+  Plan, execute, and deliver complex software tasks — with full visibility and control.
 </p>
 
 <p align="center">
-  <a href="ROADMAP.md">Roadmap</a> · <a href="CONTRIBUTING.md">Contributing</a> · <a href="LICENSE">License</a>
+  <a href="https://github.com/davidebaraldo/Klaudio/releases/latest"><img src="https://img.shields.io/github/v/release/davidebaraldo/Klaudio?style=flat-square&color=6366f1&label=release" alt="Latest Release" /></a>
+  <a href="https://github.com/davidebaraldo/Klaudio/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/davidebaraldo/Klaudio/ci.yml?style=flat-square&label=CI" alt="CI Status" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License" /></a>
+  <a href="https://github.com/davidebaraldo/Klaudio/releases"><img src="https://img.shields.io/github/downloads/davidebaraldo/Klaudio/total?style=flat-square&color=10b981&label=downloads" alt="Downloads" /></a>
+  <a href="https://goreportcard.com/report/github.com/davidebaraldo/Klaudio"><img src="https://goreportcard.com/badge/github.com/davidebaraldo/Klaudio?style=flat-square" alt="Go Report Card" /></a>
+</p>
+
+<p align="center">
+  <a href="#-quick-start">Quick Start</a> &middot;
+  <a href="ROADMAP.md">Roadmap</a> &middot;
+  <a href="CONTRIBUTING.md">Contributing</a> &middot;
+  <a href="#-api-reference">API</a> &middot;
+  <a href="https://github.com/davidebaraldo/Klaudio/releases">Releases</a>
 </p>
 
 ---
 
-Klaudio coordinates multiple AI agents working in parallel, with real-time streaming, a web interface, and Git integration. Give it a task, and it plans, executes, and delivers — with full visibility and control.
+## What is Klaudio?
 
-## Key Features
+Klaudio coordinates **multiple AI agents** working in parallel inside isolated Docker containers. Give it a task, and it:
 
-- **Planning-first approach** — A planner agent analyzes every task, generates a structured execution plan, and can ask clarification questions before execution begins
-- **Two execution modes** — Sequential (DAG-based dependency graph) or Collaborative (manager + concurrent workers with directive-based coordination)
-- **Real-time streaming** — Watch agent output live in the browser via WebSocket + xterm.js, with backfill for late joiners
-- **Inter-agent communication** — Agents coordinate through filesystem directives, database messages, and API endpoints
-- **Stop/Resume** — Pause any task, save full state (files, Claude memory, conversation context), and resume later in a fresh container
-- **Git integration** — Clone repos, auto-commit, auto-push, and auto-create PRs on Bitbucket
-- **Web UI** — Dashboard, task detail with tabs (Plan, Agents, Comms, Files), file viewer/editor, team template management
-- **Ephemeral containers** — Each agent runs in a clean Docker container. State lives in volumes, never in the container
+1. **Plans** — A planner agent analyzes the task and produces a structured execution plan
+2. **Asks** — The planner can ask clarification questions before committing to a plan
+3. **Executes** — Agents are spawned based on the plan, working sequentially or collaboratively
+4. **Delivers** — Results are collected, optionally reviewed, and can be auto-committed to Git
+
+All with real-time streaming, a modern web UI, and full stop/resume capability.
+
+---
+
+## Highlights
+
+| | Feature | Description |
+|---|---------|-------------|
+| **Planning** | Intelligent task decomposition | Read-only planner analyzes tasks, asks clarifying questions, generates structured plans with subtask dependencies |
+| **Execution** | Two modes | **Sequential** (DAG-based) or **Collaborative** (manager + concurrent workers with directive-based coordination) |
+| **Streaming** | Real-time visibility | Watch agent output live via WebSocket + xterm.js terminal, with backfill for late joiners |
+| **Teams** | Multi-agent orchestration | Agents communicate through filesystem directives, database messages, and lifecycle signals |
+| **State** | Stop & resume | Pause any task, save full state (files, Claude memory, conversation context), resume in a fresh container |
+| **Git** | End-to-end integration | Clone repos, auto-commit, auto-push, and auto-create PRs on Bitbucket |
+| **UI** | Modern web interface | Dashboard, task detail (Plan, Agents, Comms, Files tabs), file viewer/editor, team templates |
+| **Deploy** | Single binary | Frontend and Docker build context embedded in the Go binary — just download and run |
+
+---
 
 ## Architecture
 
@@ -97,119 +127,92 @@ graph TD
     linkStyle 6 stroke:#059669,stroke-width:2px
 ```
 
+---
+
 ## Tech Stack
 
-| Component | Technology |
-|-----------|-----------|
-| Backend | Go 1.25, Chi v5, gorilla/websocket |
-| Database | SQLite (modernc.org/sqlite, pure Go, no CGO) |
-| Containers | Docker SDK for Go |
-| Frontend | SvelteKit 2, Svelte 5, Tailwind CSS |
-| Terminal | xterm.js 5 |
-| Git | go-git v5, Bitbucket REST v2 |
+| Layer | Technology |
+|-------|-----------|
+| **Backend** | Go 1.22+, Chi v5 router, gorilla/websocket |
+| **Database** | SQLite — pure Go driver, no CGO ([modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite)) |
+| **Containers** | Docker SDK for Go |
+| **Frontend** | SvelteKit 2, Svelte 5, Tailwind CSS, xterm.js |
+| **Git** | go-git v5, Bitbucket REST API v2 |
+| **CI/CD** | GitHub Actions — multi-platform builds, Docker image publishing |
+
+---
 
 ## Quick Start
 
-### Prerequisites
+### Option 1 — Download a release (recommended)
+
+Download the latest binary from the [Releases page](https://github.com/davidebaraldo/Klaudio/releases/latest):
+
+```bash
+# Linux (amd64)
+curl -L https://github.com/davidebaraldo/Klaudio/releases/latest/download/klaudio-linux-amd64 -o klaudio
+chmod +x klaudio
+./klaudio
+```
+
+The binary includes the web UI and Docker build context — no build step needed.
+
+### Option 2 — Build from source
+
+#### Prerequisites
 
 - **Go 1.22+**
 - **Docker Engine** running
 - **Node.js 20+** (for the web UI)
 - **Claude Code Max** account with config in `~/.claude/`
 
-### 1. Build and run the backend
-
 ```bash
-git clone https://github.com/klaudio-ai/klaudio.git
-cd klaudio
+git clone https://github.com/davidebaraldo/Klaudio.git
+cd Klaudio
 
 # Build the agent Docker image
 make docker-build
 
-# Build and start the server
+# Build everything (frontend + backend) and start
 make run
 ```
 
-The API server starts at `http://localhost:8080`.
+The server starts at **http://localhost:8080** with the web UI served from the same port.
 
-### 2. Start the web UI (development)
+### Development mode
 
-```bash
-cd web
-npm install
-npm run dev
-```
-
-The web UI is available at `http://localhost:5173`.
-
-### 3. Create your first task
+For faster iteration during development:
 
 ```bash
-curl -X POST http://localhost:8080/api/tasks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Hello World",
-    "prompt": "Create a simple Hello World program in Go",
-    "auto_start": true
-  }'
+# Terminal 1: Build and run backend only
+make dev
+
+# Terminal 2: Start frontend dev server with HMR
+cd web && npm install && npm run dev
 ```
 
-Or use the web UI at `http://localhost:5173/tasks/new`.
+The dev frontend runs at `http://localhost:5173` and proxies API calls to the Go backend.
 
-## Configuration
+---
 
-Configuration is loaded from `config.yaml` with environment variable overrides:
-
-```yaml
-server:
-  port: 8080                    # KLAUDIO_PORT
-
-docker:
-  image_name: klaudio-agent
-  max_agents: 5                 # Global concurrent agent limit
-  max_agents_per_task: 3        # Per-task agent limit
-
-claude:
-  auth_mode: host               # "host" (mount ~/.claude/) or "env" (session key)
-  # session_key: ""             # CLAUDE_SESSION_KEY (for "env" mode)
-
-database:
-  path: data/klaudio.db         # KLAUDIO_DB_PATH
-
-storage:
-  data_dir: data
-  auto_save_interval: 5m
-  auto_save_enabled: true
-  max_checkpoints: 3
-  state_retention_days: 7
-```
-
-### Claude Code Authentication
-
-**Host mode** (default): Mounts your `~/.claude/` directory into containers as read-only.
-
-**Env mode**: Set `CLAUDE_SESSION_KEY` environment variable. Useful for CI/CD or when `~/.claude/` is not available.
-
-## How It Works
-
-### Task Lifecycle
+## Task Lifecycle
 
 ```mermaid
 stateDiagram-v2
     direction LR
 
     [*] --> created
-    created --> planning : 🚀 start
-    planning --> planned : 📝 plan ready
-    planned --> approved : ✅ user approves
-    approved --> running : ⚡ execute
+    created --> planning : start
+    planning --> planned : plan ready
+    planned --> approved : user approves
+    approved --> running : execute
 
-    running --> completed : 🎉 success
-    running --> paused : ⏸️ stop
-    running --> failed : ❌ error
+    running --> completed : success
+    running --> paused : stop
+    running --> failed : error
 
-    paused --> running : ▶️ resume
-    failed --> planning : 🔄 retry
+    paused --> running : resume
+    failed --> planning : retry
     completed --> [*]
 
     classDef initial fill:#6366f1,color:#fff,stroke:#4f46e5,stroke-width:2px
@@ -230,120 +233,188 @@ stateDiagram-v2
     class failed error
 ```
 
-1. **Create** — Submit a task with a prompt and optional repo config
-2. **Plan** — A read-only planner agent analyzes the task, may ask clarification questions, produces a structured execution plan
-3. **Approve** — Review and optionally edit the plan, then approve
-4. **Execute** — Agents are spawned based on the plan (sequential or collaborative mode)
-5. **Monitor** — Watch real-time output, inject messages to steer agents
-6. **Complete** — Results collected, optional reviewer verifies coherence
-
 ### Execution Modes
 
-**Sequential (DAG)**: Subtasks execute in dependency order. Each subtask waits for its dependencies to complete before starting.
+**Sequential (DAG)** — Subtasks execute in dependency order. Each subtask waits for its dependencies to complete before starting.
 
-**Collaborative**: A manager agent spawns first and writes coordination directives. Worker agents spawn simultaneously and wait for their directive files. The manager monitors progress via API and receives lifecycle signals (`WORKER_COMPLETED`, `WORKER_FAILED`, `ALL_WORKERS_DONE`).
+**Collaborative** — A manager agent spawns first and writes coordination directives. Worker agents spawn simultaneously and wait for their directive files. The manager monitors progress and receives lifecycle signals (`WORKER_COMPLETED`, `WORKER_FAILED`, `ALL_WORKERS_DONE`).
+
+---
+
+## Configuration
+
+Create a `config.yaml` file (or use environment variables):
+
+```yaml
+server:
+  port: 8080                    # KLAUDIO_PORT
+  host: 0.0.0.0                 # KLAUDIO_HOST
+
+docker:
+  image_name: klaudio-agent
+  max_agents: 5                 # Global concurrent agent limit
+  max_agents_per_task: 3        # Per-task agent limit
+
+claude:
+  auth_mode: host               # "host" (mount ~/.claude/) or "env" (session key)
+  # session_key: ""             # CLAUDE_SESSION_KEY
+
+database:
+  path: data/klaudio.db         # KLAUDIO_DB_PATH
+
+storage:
+  data_dir: data
+  auto_save_enabled: true
+  auto_save_interval: 5m
+  max_checkpoints: 3
+```
+
+### Claude Code Authentication
+
+| Mode | How it works | Best for |
+|------|-------------|----------|
+| **host** (default) | Mounts `~/.claude/` into containers (read-only) | Local development |
+| **env** | Pass `CLAUDE_SESSION_KEY` environment variable | CI/CD, servers |
+
+---
+
+## API Reference
+
+### Tasks
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/tasks` | Create a new task |
+| `GET` | `/api/tasks` | List tasks (paginated, filterable) |
+| `GET` | `/api/tasks/:id` | Get task details with agents |
+| `DELETE` | `/api/tasks/:id` | Delete a task |
+| `POST` | `/api/tasks/:id/start` | Begin planning phase |
+| `POST` | `/api/tasks/:id/approve` | Approve plan, start execution |
+| `POST` | `/api/tasks/:id/stop` | Pause task, save checkpoint |
+| `POST` | `/api/tasks/:id/resume` | Resume from checkpoint |
+| `POST` | `/api/tasks/:id/relaunch` | Relaunch with same workspace |
+
+### Plans & Questions
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/tasks/:id/plan` | Get execution plan |
+| `GET` | `/api/tasks/:id/questions` | Get planner questions |
+| `POST` | `/api/tasks/:id/questions/:qid/answer` | Answer a question |
+
+### Communication & Files
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/tasks/:id/message` | Inject message to agent stdin |
+| `GET/POST` | `/api/tasks/:id/messages` | Inter-agent messages |
+| `GET/POST` | `/api/tasks/:id/files` | Upload/list task files |
+| `WS` | `/ws/tasks/:id/stream` | Real-time agent output |
+
+### Templates
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET/POST` | `/api/team-templates` | Team template CRUD |
+| `GET/POST` | `/api/repo-templates` | Repository template CRUD |
+
+<details>
+<summary><strong>Example: Create and start a task</strong></summary>
+
+```bash
+# Create a task with auto-start
+curl -s http://localhost:8080/api/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Hello World",
+    "prompt": "Create a simple Hello World API in Go with tests",
+    "auto_start": true
+  }' | jq .
+
+# Watch the task in your browser
+open http://localhost:8080/tasks/<task-id>
+```
+
+</details>
+
+---
 
 ## Project Structure
 
 ```
 klaudio/
-├── cmd/klaudio/          # Application entry point
+├── cmd/klaudio/              # Entry point, embed directives
 ├── internal/
-│   ├── api/              # HTTP handlers, Chi router, WebSocket (12 files)
-│   ├── agent/            # Agent pool management
-│   ├── config/           # Configuration loading (YAML + env)
-│   ├── db/               # SQLite database layer (hand-written queries)
-│   ├── docker/           # Docker container management
-│   ├── files/            # File upload/download/transfer
-│   ├── repo/             # Git operations, Bitbucket API
-│   ├── state/            # Checkpoint persistence, autosave
-│   ├── stream/           # Real-time streaming hub, ring buffers
-│   └── task/             # Core orchestration (11 files, ~4k lines)
-│       ├── manager.go        # Task lifecycle controller
-│       ├── planner.go        # Read-only planner with Q&A
-│       ├── orchestrator.go   # DAG-based sequential execution
-│       ├── collaborative.go  # Manager + workers execution
-│       ├── comms.go          # Inter-agent messaging
-│       ├── dependency.go     # Dependency graph
-│       ├── executor.go       # Container execution wrapper
-│       ├── reviewer.go       # Optional QA reviewer
-│       └── filelock.go       # File-level locking
-├── docker/               # Dockerfile and entrypoint for agent containers
-├── migrations/           # SQL migration files (001-005)
-├── web/                  # SvelteKit frontend
+│   ├── api/                  # HTTP handlers, Chi router, WebSocket
+│   ├── agent/                # Agent pool management
+│   ├── config/               # YAML + env configuration
+│   ├── db/                   # SQLite layer (hand-written queries)
+│   ├── docker/               # Docker container management
+│   ├── embedded/             # Embedded frontend + Docker context
+│   ├── files/                # File upload/download/transfer
+│   ├── repo/                 # Git operations, Bitbucket API
+│   ├── state/                # Checkpoint persistence, autosave
+│   ├── stream/               # Real-time streaming hub
+│   └── task/                 # Core orchestration engine
+│       ├── manager.go            # Task lifecycle controller
+│       ├── planner.go            # Read-only planner with Q&A
+│       ├── orchestrator.go       # DAG-based sequential execution
+│       ├── collaborative.go      # Manager + workers execution
+│       ├── comms.go              # Inter-agent messaging
+│       └── ...
+├── docker/                   # Agent Dockerfile and entrypoint
+├── migrations/               # SQL migrations (001–005)
+├── web/                      # SvelteKit frontend
 │   └── src/
-│       ├── routes/           # Pages (dashboard, task detail, settings)
+│       ├── routes/               # Pages
 │       └── lib/
-│           ├── components/   # Terminal, PlanViewer, FileManager, AgentComms...
-│           ├── stores/       # WebSocket, tasks
-│           └── api.ts        # TypeScript API client
-├── config.yaml           # Default configuration
-└── Makefile              # Build targets
+│           ├── components/       # Terminal, PlanViewer, FileManager...
+│           ├── stores/           # WebSocket, tasks
+│           └── api.ts            # TypeScript API client
+├── .github/workflows/        # CI + Release pipelines
+├── config.yaml               # Default configuration
+└── Makefile                  # Build targets
 ```
 
-## API Overview
-
-| Endpoint | Description |
-|----------|-------------|
-| `POST /api/tasks` | Create a new task |
-| `GET /api/tasks` | List tasks (paginated, filterable) |
-| `GET /api/tasks/:id` | Get task details |
-| `POST /api/tasks/:id/start` | Begin planning |
-| `POST /api/tasks/:id/approve` | Approve plan, start execution |
-| `POST /api/tasks/:id/stop` | Pause task, save checkpoint |
-| `POST /api/tasks/:id/resume` | Resume from checkpoint |
-| `POST /api/tasks/:id/message` | Inject message to agents |
-| `GET /api/tasks/:id/plan` | Get execution plan |
-| `GET /api/tasks/:id/questions` | Get planner questions |
-| `POST /api/tasks/:id/questions/:qid/answer` | Answer planner question |
-| `GET/POST /api/tasks/:id/files` | Upload/list files |
-| `GET/POST /api/tasks/:id/messages` | Inter-agent messages |
-| `GET/POST /api/team-templates` | Team template management |
-| `GET/POST /api/repo-templates` | Repository template management |
-| `WS /ws/tasks/:id/stream` | Real-time agent output stream |
+---
 
 ## Development
 
 ```bash
-# Build the binary
-make build
-
-# Build and run
-make run
-
-# Build the agent Docker image
-make docker-build
-
-# Run tests
-make test
-
-# Clean build artifacts and database
-make clean
-
-# Tidy Go modules
-make tidy
+make build            # Build binary (frontend + backend)
+make build-backend    # Build backend only (faster)
+make run              # Build and start server
+make dev              # Backend-only build + start
+make docker-build     # Build agent Docker image
+make test             # Run all tests
+make clean            # Remove artifacts and database
+make tidy             # go mod tidy
 ```
 
-### Development Rules
+### Development Guidelines
 
-1. **No CGO** — Pure Go SQLite via modernc.org/sqlite. Never add CGO dependencies.
-2. **Context everywhere** — All I/O functions accept `context.Context` as the first parameter.
-3. **Wrapped errors** — Always use `fmt.Errorf("doing X: %w", err)`.
-4. **Hand-written SQL** — Database queries in `internal/db/queries.go`, written by hand.
-5. **No global state** — Dependencies passed via structs.
-6. **Structured logging** — Use `log/slog` for all logging.
+- **No CGO** — Pure Go SQLite via `modernc.org/sqlite`
+- **Context everywhere** — All I/O functions accept `context.Context`
+- **Wrapped errors** — `fmt.Errorf("doing X: %w", err)`
+- **Hand-written SQL** — No ORM, queries in `internal/db/queries.go`
+- **Structured logging** — `log/slog` for all output
+- **No global state** — Dependencies passed via structs
 
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [Roadmap](ROADMAP.md) | Development roadmap with implementation status |
-| [Contributing](CONTRIBUTING.md) | Contribution guidelines |
+---
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Good first issues
+
+- Add unit tests for existing packages
+- Improve error messages and input validation
+- UI improvements and bug fixes
+- GitHub/GitLab Git integration ([Phase 7](ROADMAP.md#phase-7--multi-platform-git-integration-))
+
+---
 
 ## License
 
-This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE) file for details.
+[Apache License 2.0](LICENSE) — use it freely in personal and commercial projects.

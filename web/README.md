@@ -1,42 +1,55 @@
-# sv
+# Klaudio Web UI
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit 2 frontend for the Klaudio orchestrator.
 
-## Creating a project
+## Stack
 
-If you're seeing this, you've probably already done this step. Congrats!
+- **SvelteKit 2** with Svelte 5 runes syntax
+- **Tailwind CSS** for styling
+- **TypeScript** throughout
+- **xterm.js** for real-time terminal output
+- **adapter-static** for embedding into the Go binary
 
-```sh
-# create a new project
-npx sv create my-app
-```
+## Development
 
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-npx sv@0.12.5 create --template minimal --types ts --no-install web
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
+```bash
+npm install
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
 
-## Building
+The dev server starts at `http://localhost:5173` and proxies API calls to `http://localhost:8080`.
 
-To create a production version of your app:
+## Build
 
-```sh
+```bash
 npm run build
 ```
 
-You can preview the production build with `npm run preview`.
+Output goes to `build/` — static HTML/JS/CSS ready for embedding via `//go:embed`.
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+## Structure
+
+```
+src/
+├── routes/                    # Pages
+│   ├── +layout.svelte             # Sidebar layout
+│   ├── +page.svelte               # Dashboard (task list)
+│   └── tasks/
+│       ├── new/+page.svelte       # Task creation wizard
+│       └── [id]/+page.svelte      # Task detail (4 tabs)
+└── lib/
+    ├── api.ts                 # TypeScript API client
+    ├── components/            # Reusable components
+    │   ├── Terminal.svelte        # xterm.js WebSocket terminal
+    │   ├── PlanViewer.svelte      # Plan viewer/editor
+    │   ├── FileManager.svelte     # File tree with viewer modal
+    │   ├── AgentComms.svelte      # Inter-agent communication
+    │   ├── QuestionPanel.svelte   # Planner Q&A
+    │   ├── StatusBadge.svelte     # Task/agent status badges
+    │   └── MessageInput.svelte    # Agent message input
+    ├── stores/
+    │   ├── websocket.ts           # WebSocket connection store
+    │   └── tasks.ts               # Task list store
+    └── assets/
+        └── klaudio-logo.svg       # Logo
+```
