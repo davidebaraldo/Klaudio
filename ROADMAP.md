@@ -56,8 +56,8 @@ Go backend that launches Claude Code containers and captures output.
 | 1.7 | SQLite database — schema, migrations (modernc.org/sqlite, no CGO) | ✅ Done |
 | 1.8 | Task API — create task, launch container, return output | ✅ Done |
 | 1.9 | E2E test script | ⬜ To do |
-| 1.10 | Auto Docker image build — rebuild agent image on `make build` / server start if image is missing or `docker/` files have changed | ⬜ To do |
-| 1.11 | Embedded Docker image — embed `Dockerfile` and build context in the Go binary via `//go:embed`, load image from binary at runtime if not present on host | ⬜ To do |
+| 1.10 | Auto Docker image build — rebuild agent image on `make build` / server start if image is missing or `docker/` files have changed | ✅ Done |
+| 1.11 | Embedded Docker image — embed `Dockerfile` and build context in the Go binary via `//go:embed`, load image from binary at runtime if not present on host | ✅ Done |
 
 **Key files**: `cmd/klaudio/main.go`, `internal/config/`, `internal/docker/`, `internal/api/router.go`, `internal/db/`, `docker/Dockerfile.agent`
 
@@ -106,9 +106,9 @@ Agent output visible live in the browser. Full web interface.
 | 3.14 | WebSocket store — reactive Svelte store for WS connection | ✅ Done |
 | 3.15 | Dev server proxy — Vite proxy to Go backend | ✅ Done |
 | 3.16 | File content viewer — view, edit, delete files via modal | ✅ Done |
-| 3.17 | Embedded frontend — `npm run build` + `//go:embed` to bundle SvelteKit static assets into the Go binary | ⬜ To do |
-| 3.18 | Static file server — serve embedded frontend on `/` with SPA fallback, coexisting with `/api` routes | ⬜ To do |
-| 3.19 | Build integration — `make build` runs frontend build before Go compile, single binary output | ⬜ To do |
+| 3.17 | Embedded frontend — `npm run build` + `//go:embed` to bundle SvelteKit static assets into the Go binary | ✅ Done |
+| 3.18 | Static file server — serve embedded frontend on `/` with SPA fallback, coexisting with `/api` routes | ✅ Done |
+| 3.19 | Build integration — `make build` runs frontend build before Go compile, single binary output | ✅ Done |
 
 **Key files**: `internal/stream/`, `internal/api/websocket.go`, `web/src/routes/`, `web/src/lib/components/`, `web/src/lib/api.ts`
 
@@ -266,12 +266,12 @@ Automated build, test, and release pipeline via GitHub Actions with multi-platfo
 
 | # | Feature | Status |
 |---|---------|--------|
-| 9.1 | CI workflow — `ci.yml`: lint, test, build on every push and PR (Go + Node.js matrix) | ⬜ To do |
-| 9.2 | Release workflow — `release.yml`: triggered by `v*` tags, builds release artifacts | ⬜ To do |
-| 9.3 | Multi-platform Go binaries — cross-compile for `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64` | ⬜ To do |
-| 9.4 | Frontend build — bundle SvelteKit static assets, embed in Go binary or ship as separate archive | ⬜ To do |
-| 9.5 | Docker image publish — build and push `klaudio-agent` image to GitHub Container Registry (ghcr.io) | ⬜ To do |
-| 9.6 | GitHub Release — auto-create release with changelog, checksums (SHA256), and signed artifacts | ⬜ To do |
+| 9.1 | CI workflow — `ci.yml`: lint, test, build on every push and PR (Go + Node.js matrix) | ✅ Done |
+| 9.2 | Release workflow — `release.yml`: triggered by `v*` tags, builds release artifacts | ✅ Done |
+| 9.3 | Multi-platform Go binaries — cross-compile for `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64` | ✅ Done |
+| 9.4 | Frontend build — bundle SvelteKit static assets, embed in Go binary or ship as separate archive | ✅ Done |
+| 9.5 | Docker image publish — build and push `klaudio-agent` image to GitHub Container Registry (ghcr.io) | ✅ Done |
+| 9.6 | GitHub Release — auto-create release with changelog, checksums (SHA256), and signed artifacts | ✅ Done |
 | 9.7 | GoReleaser integration — `.goreleaser.yml` for automated multi-platform builds, archives, and changelogs | ⬜ To do |
 | 9.8 | Semantic versioning — version injected at build time via `ldflags` (`-X main.version=`) | ⬜ To do |
 | 9.9 | Changelog generation — auto-generate from conventional commits (`feat:`, `fix:`, `refactor:`) | ⬜ To do |

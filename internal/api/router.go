@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/klaudio-ai/klaudio/internal/config"
 	"github.com/klaudio-ai/klaudio/internal/db"
 	"github.com/klaudio-ai/klaudio/internal/docker"
+	"github.com/klaudio-ai/klaudio/internal/embedded"
 	"github.com/klaudio-ai/klaudio/internal/files"
 	"github.com/klaudio-ai/klaudio/internal/stream"
 	"github.com/klaudio-ai/klaudio/internal/task"
@@ -126,6 +128,12 @@ func NewRouter(cfg *config.Config, svc *Services) chi.Router {
 			r.Get("/", h.GetConfig)
 		})
 	})
+
+	// Serve embedded frontend on all unmatched routes (SPA fallback)
+	if embedded.HasFrontend() {
+		slog.Info("serving embedded frontend")
+		r.NotFound(embedded.FrontendHandler().ServeHTTP)
+	}
 
 	return r
 }

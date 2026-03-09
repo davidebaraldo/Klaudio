@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/pkg/archive"
+
+	"github.com/klaudio-ai/klaudio/internal/embedded"
 )
 
 // ImageExists checks whether the agent image already exists locally.
@@ -26,7 +29,9 @@ func (m *Manager) ImageExists(ctx context.Context) (bool, error) {
 	return len(images) > 0, nil
 }
 
-// BuildImage builds the klaudio-agent Docker image from the docker/ directory.
+// BuildImage builds the klaudio-agent Docker image.
+// It first tries the embedded Docker build context (compiled into the binary).
+// If not available, it falls back to reading from the filesystem dockerDir.
 // If the image already exists and force is false, it returns immediately.
 func (m *Manager) BuildImage(ctx context.Context, dockerDir string, force bool) error {
 	if !force {
@@ -39,19 +44,54 @@ func (m *Manager) BuildImage(ctx context.Context, dockerDir string, force bool) 
 		}
 	}
 
-	// Resolve the absolute path to the docker build context
+	// Try embedded build context first
+	if embedded.HasDockerFiles() {
+		slog.Info("building Docker image from embedded context", "image", m.imageName)
+		return m.buildFromEmbedded(ctx)
+	}
+
+	// Fallback to filesystem
+	slog.Info("building Docker image from filesystem", "image", m.imageName, "dir", dockerDir)
+	return m.buildFromFilesystem(ctx, dockerDir)
+}
+
+// buildFromEmbedded builds the Docker image using the embedded build context.
+func (m *Manager) buildFromEmbedded(ctx context.Context) error {
+	buildContext, err := embedded.DockerBuildContext()
+	if err != nil {
+		return fmt.Errorf("creating embedded build context: %w", err)
+	}
+
+	resp, err := m.client.ImageBuild(ctx, buildContext, types.ImageBuildOptions{
+		Dockerfile:  "Dockerfile.agent",
+		Tags:        []string{m.imageName},
+		Remove:      true,
+		ForceRemove: true,
+	})
+	if err != nil {
+		return fmt.Errorf("building image %s from embedded context: %w", m.imageName, err)
+	}
+	defer resp.Body.Close()
+
+	if err := consumeBuildOutput(resp.Body); err != nil {
+		return fmt.Errorf("reading build output for %s: %w", m.imageName, err)
+	}
+
+	return nil
+}
+
+// buildFromFilesystem builds the Docker image from a directory on the filesystem.
+func (m *Manager) buildFromFilesystem(ctx context.Context, dockerDir string) error {
 	absDir, err := filepath.Abs(dockerDir)
 	if err != nil {
 		return fmt.Errorf("resolving docker directory path: %w", err)
 	}
 
-	// Verify Dockerfile exists
 	dockerfilePath := filepath.Join(absDir, "Dockerfile.agent")
 	if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
 		return fmt.Errorf("Dockerfile.agent not found at %s", dockerfilePath)
 	}
 
-	// Create a tar archive of the build context
 	buildContext, err := archive.TarWithOptions(absDir, &archive.TarOptions{})
 	if err != nil {
 		return fmt.Errorf("creating build context tar: %w", err)
@@ -59,9 +99,9 @@ func (m *Manager) BuildImage(ctx context.Context, dockerDir string, force bool) 
 	defer buildContext.Close()
 
 	resp, err := m.client.ImageBuild(ctx, buildContext, types.ImageBuildOptions{
-		Dockerfile: "Dockerfile.agent",
-		Tags:       []string{m.imageName},
-		Remove:     true,
+		Dockerfile:  "Dockerfile.agent",
+		Tags:        []string{m.imageName},
+		Remove:      true,
 		ForceRemove: true,
 	})
 	if err != nil {
@@ -69,7 +109,6 @@ func (m *Manager) BuildImage(ctx context.Context, dockerDir string, force bool) 
 	}
 	defer resp.Body.Close()
 
-	// Read the build output to completion (required for the build to finish)
 	if err := consumeBuildOutput(resp.Body); err != nil {
 		return fmt.Errorf("reading build output for %s: %w", m.imageName, err)
 	}
