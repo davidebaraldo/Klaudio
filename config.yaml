@@ -1,0 +1,23 @@
+server:
+  port: 8080
+  host: "0.0.0.0"
+
+docker:
+  # host: "npipe:////./pipe/docker_engine"  # Windows Docker Desktop (auto-detected)
+  # host: "unix:///var/run/docker.sock"      # Linux/macOS (auto-detected)
+  image_name: klaudio-agent
+  network: klaudio-net
+  max_agents: 5
+
+claude:
+  auth_mode: host  # "host" = mount ~/.claude/ from host, "env" = use session key env var
+  # host_dir: ""   # Override path to ~/.claude/ on host (auto-detected if empty)
+  # session_key: "" # Used when auth_mode is "env" (or set CLAUDE_SESSION_KEY env var)
+
+database:
+  path: data/klaudio.db
+
+storage:
+  data_dir: data
+  states_dir: data/states
+  files_dir: data/files

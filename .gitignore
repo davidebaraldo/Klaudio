@@ -1,0 +1,31 @@
+# Build artifacts
+bin/
+*.exe
+*.exe~
+
+# Runtime data
+data/
+klaudio.log
+
+# Go
+vendor/
+
+# Node / SvelteKit
+web/node_modules/
+web/.svelte-kit/
+web/build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+config.local.yaml
+*.pem
+*.key

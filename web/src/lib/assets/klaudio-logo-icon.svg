@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="5 10 100 100" width="120" height="120">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563EB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#1E40AF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#2563EB;stop-opacity:0.5" />
+      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:0.5" />
+    </linearGradient>
+  </defs>
+
+  <!-- Connection lines from center to satellite nodes -->
+  <line x1="52" y1="60" x2="20" y2="28" stroke="url(#lineGrad)" stroke-width="2" stroke-linecap="round"/>
+  <line x1="52" y1="60" x2="84" y2="28" stroke="url(#lineGrad)" stroke-width="2" stroke-linecap="round"/>
+  <line x1="52" y1="60" x2="20" y2="92" stroke="url(#lineGrad)" stroke-width="2" stroke-linecap="round"/>
+  <line x1="52" y1="60" x2="84" y2="92" stroke="url(#lineGrad)" stroke-width="2" stroke-linecap="round"/>
+  <line x1="52" y1="60" x2="52" y2="22" stroke="url(#lineGrad)" stroke-width="2" stroke-linecap="round"/>
+  <line x1="52" y1="60" x2="52" y2="98" stroke="url(#lineGrad)" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Satellite nodes (agents) -->
+  <circle cx="20" cy="28" r="7" fill="#2563EB" opacity="0.8"/>
+  <circle cx="84" cy="28" r="7" fill="#7C3AED" opacity="0.8"/>
+  <circle cx="52" cy="22" r="6" fill="#3B82F6" opacity="0.7"/>
+  <circle cx="20" cy="92" r="7" fill="#7C3AED" opacity="0.8"/>
+  <circle cx="84" cy="92" r="7" fill="#2563EB" opacity="0.8"/>
+  <circle cx="52" cy="98" r="6" fill="#3B82F6" opacity="0.7"/>
+
+  <!-- Small code brackets inside some satellites -->
+  <text x="20" y="31" text-anchor="middle" font-family="monospace" font-size="8" fill="white" font-weight="bold">&lt;&gt;</text>
+  <text x="84" y="31" text-anchor="middle" font-family="monospace" font-size="8" fill="white" font-weight="bold">{}</text>
+  <text x="20" y="95" text-anchor="middle" font-family="monospace" font-size="8" fill="white" font-weight="bold">/</text>
+  <text x="84" y="95" text-anchor="middle" font-family="monospace" font-size="8" fill="white" font-weight="bold">~</text>
+
+  <!-- Central hub node (larger) -->
+  <circle cx="52" cy="60" r="16" fill="url(#grad1)"/>
+  <!-- K letter in center -->
+  <text x="52" y="66" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="18" fill="white" font-weight="bold">K</text>
+
+  <!-- Orbital ring around center -->
+  <ellipse cx="52" cy="60" rx="26" ry="26" fill="none" stroke="url(#grad2)" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.4"/>
+</svg>
