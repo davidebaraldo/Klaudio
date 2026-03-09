@@ -1,4 +1,4 @@
-.PHONY: build run docker-build test clean tidy migrate frontend embed-docker
+.PHONY: build run docker-build test clean tidy migrate frontend
 
 # Binary output
 BINARY := klaudio
@@ -12,16 +12,15 @@ LDFLAGS := -s -w
 FRONTEND_SRC := web
 FRONTEND_BUILD := $(FRONTEND_SRC)/build
 EMBED_FRONTEND := cmd/klaudio/frontend
-EMBED_DOCKER := cmd/klaudio/docker
 
 ## Build the full binary (frontend + Docker context embedded)
-build: frontend embed-docker
+build: frontend
 	@echo "Building $(BINARY)..."
 	@mkdir -p $(BUILD_DIR)
 	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) ./cmd/klaudio
 
 ## Build Go binary only (no frontend, faster for backend development)
-build-backend: embed-docker
+build-backend:
 	@echo "Building $(BINARY) (backend only)..."
 	@mkdir -p $(BUILD_DIR)
 	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) ./cmd/klaudio
@@ -34,13 +33,6 @@ frontend:
 	@rm -rf $(EMBED_FRONTEND)
 	@mkdir -p $(EMBED_FRONTEND)
 	@cp -r $(FRONTEND_BUILD)/* $(EMBED_FRONTEND)/ 2>/dev/null || echo "Warning: frontend build output not found"
-
-## Copy Docker files to embed directory
-embed-docker:
-	@rm -rf $(EMBED_DOCKER)
-	@mkdir -p $(EMBED_DOCKER)
-	@cp docker/Dockerfile.agent $(EMBED_DOCKER)/
-	@cp docker/entrypoint.sh $(EMBED_DOCKER)/
 
 ## Build and run the server
 run: build
@@ -67,9 +59,8 @@ clean:
 	@echo "Cleaning..."
 	rm -rf $(BUILD_DIR)
 	rm -rf $(EMBED_FRONTEND)
-	rm -rf $(EMBED_DOCKER)
-	@mkdir -p $(EMBED_FRONTEND) $(EMBED_DOCKER)
-	@touch $(EMBED_FRONTEND)/.gitkeep $(EMBED_DOCKER)/.gitkeep
+	@mkdir -p $(EMBED_FRONTEND)
+	@touch $(EMBED_FRONTEND)/.gitkeep
 	rm -rf data/klaudio.db
 
 ## Run go mod tidy

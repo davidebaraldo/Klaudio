@@ -27,7 +27,7 @@ jobs:
         run: go test ./... -v -count=1
 
       - name: Build (backend only)
-        run: make embed-docker && make build-backend
+        run: make build-backend
 
   frontend:
     name: Frontend (SvelteKit)
