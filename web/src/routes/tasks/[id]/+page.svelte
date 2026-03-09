@@ -143,7 +143,10 @@
 		}
 	}
 
-	onMount(async () => {
+	onMount(() => {
+		let cleanup: (() => void) | undefined;
+
+		(async () => {
 		await loadPlan();
 
 		// Dynamic import for Terminal (browser-only)
@@ -174,11 +177,14 @@
 			}
 		}, 3000);
 
-		return () => {
+		cleanup = () => {
 			unsubEvents();
 			stream?.disconnect();
 			clearInterval(pollInterval);
 		};
+		})();
+
+		return () => cleanup?.();
 	});
 
 	const canStart = $derived(task?.status === 'created');

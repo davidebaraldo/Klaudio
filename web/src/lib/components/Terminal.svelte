@@ -7,7 +7,10 @@
 	let terminalEl: HTMLDivElement;
 	let stream: ReturnType<typeof createTaskStream> | null = null;
 
-	onMount(async () => {
+	onMount(() => {
+		let cleanup: (() => void) | undefined;
+
+		(async () => {
 		const { Terminal } = await import('@xterm/xterm');
 		const { FitAddon } = await import('@xterm/addon-fit');
 		const { WebLinksAddon } = await import('@xterm/addon-web-links');
@@ -62,12 +65,15 @@
 		});
 		resizeObserver.observe(terminalEl);
 
-		return () => {
+		cleanup = () => {
 			unsubTerminal();
 			stream?.disconnect();
 			resizeObserver.disconnect();
 			term.dispose();
 		};
+		})();
+
+		return () => cleanup?.();
 	});
 </script>
 
