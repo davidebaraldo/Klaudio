@@ -77,6 +77,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Determine Docker tags
+        id: docker-tags
+        run: |
+          TAG=${GITHUB_REF_NAME}
+          REPO="ghcr.io/${{ github.repository_owner }}/klaudio-agent"
+          if echo "$TAG" | grep -qE '(-dev|-alpha|-beta|-rc)'; then
+            echo "tags=${REPO}:${TAG}" >> $GITHUB_OUTPUT
+          else
+            echo "tags=${REPO}:${TAG},${REPO}:latest" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and push agent image
         uses: docker/build-push-action@v6
         with:
@@ -84,9 +95,7 @@ jobs:
           file: docker/Dockerfile.agent
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/klaudio-agent:${{ github.ref_name }}
-            ghcr.io/${{ github.repository_owner }}/klaudio-agent:latest
+          tags: ${{ steps.docker-tags.outputs.tags }}
 
   release:
     name: Create Release
@@ -111,11 +120,24 @@ jobs:
           done
           cd release && sha256sum * > checksums-sha256.txt
 
+      - name: Determine if pre-release
+        id: prerelease
+        run: |
+          TAG=${GITHUB_REF_NAME}
+          if echo "$TAG" | grep -qE '(-dev|-alpha|-beta|-rc)'; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "label=Pre-release" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            echo "label=Stable" >> $GITHUB_OUTPUT
+          fi
+
       - name: Generate changelog
         id: changelog
         run: |
-          PREV_TAG=$(git tag --sort=-version:refname | head -2 | tail -1)
-          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "${GITHUB_REF_NAME}" ]; then
+          # Find previous tag (skip current)
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${GITHUB_REF_NAME}$" | head -1)
+          if [ -z "$PREV_TAG" ]; then
             echo "body=Initial release" >> $GITHUB_OUTPUT
           else
             LOG=$(git log ${PREV_TAG}..${GITHUB_REF_NAME} --pretty=format:"- %s" --no-merges)
@@ -129,4 +151,5 @@ jobs:
         with:
           body: ${{ steps.changelog.outputs.body }}
           files: release/*
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
           generate_release_notes: true
