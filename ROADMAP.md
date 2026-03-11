@@ -13,7 +13,7 @@ graph LR
     P5["⏸️ Phase 5<br/><b>Stop/Resume</b><br/>✅ Complete"]
     P6["👥 Phase 6<br/><b>Team Agents</b><br/>✅ Complete"]
     P6P["🤝 Phase 6+<br/><b>Collaborative + Comms</b><br/>✅ Complete"]
-    P7["🌍 Phase 7<br/><b>Multi-Platform Git</b><br/>⬜ Planned"]
+    P7["🌍 Phase 7<br/><b>Multi-Platform Git</b><br/>🔶 Partial"]
     P8["🖥️ Phase 8<br/><b>Service Installation</b><br/>⬜ Planned"]
     P9["🚀 Phase 9<br/><b>CI/CD & Releases</b><br/>⬜ Planned"]
 
@@ -26,7 +26,7 @@ graph LR
     style P5 fill:#8b5cf6,stroke:#7c3aed,color:#fff,stroke-width:2px
     style P6 fill:#d946ef,stroke:#c026d3,color:#fff,stroke-width:2px
     style P6P fill:#ec4899,stroke:#db2777,color:#fff,stroke-width:2px
-    style P7 fill:#475569,stroke:#64748b,color:#e2e8f0,stroke-width:2px,stroke-dasharray:5
+    style P7 fill:#d97706,stroke:#b45309,color:#fff,stroke-width:2px
     style P8 fill:#475569,stroke:#64748b,color:#e2e8f0,stroke-width:2px,stroke-dasharray:5
     style P9 fill:#475569,stroke:#64748b,color:#e2e8f0,stroke-width:2px,stroke-dasharray:5
 
@@ -197,24 +197,26 @@ Manager-directed coordination with inter-agent messaging.
 
 ---
 
-## Phase 7 — Multi-Platform Git ⬜
+## Phase 7 — Multi-Platform Git 🔶
 
 > GitHub and GitLab integration with unified platform abstraction.
 
 | # | Feature | Status |
 |---|---------|--------|
-| 7.1 | `GitPlatform` interface — common abstraction | ⬜ |
-| 7.2 | GitHub API client — PRs, branches, reviewers, labels | ⬜ |
-| 7.3 | GitLab API client — MRs, branches, pipelines | ⬜ |
-| 7.4 | Platform auto-detection from URL | ⬜ |
-| 7.5 | Unified credential management (PAT, OAuth, SSH) | ⬜ |
-| 7.6 | GitHub Actions integration | ⬜ |
-| 7.7 | GitLab CI integration | ⬜ |
-| 7.8 | Self-hosted support (GHE, GitLab self-managed) | ⬜ |
-| 7.9 | PR/MR status tracking with CI results | ⬜ |
-| 7.10 | Multi-repo tasks | ⬜ |
-| 7.11 | UI: platform selector | ⬜ |
-| 7.12 | UI: PR/MR status widget | ⬜ |
+| 7.1 | Platform auto-detection from URL | ✅ |
+| 7.2 | GitHub API client — PRs, branches, reviewers | ✅ |
+| 7.3 | Platform-aware Git auth (x-access-token / x-token-auth) | ✅ |
+| 7.4 | GitHub URL parsing (HTTPS + SSH) | ✅ |
+| 7.5 | Auto-PR support for GitHub + Bitbucket | ✅ |
+| 7.6 | GitLab API client — MRs, branches, pipelines | ⬜ |
+| 7.7 | Unified credential management (PAT, OAuth, SSH) | ⬜ |
+| 7.8 | GitHub Actions integration | ⬜ |
+| 7.9 | GitLab CI integration | ⬜ |
+| 7.10 | Self-hosted support (GHE, GitLab self-managed) | ⬜ |
+| 7.11 | PR/MR status tracking with CI results | ⬜ |
+| 7.12 | Multi-repo tasks | ⬜ |
+| 7.13 | UI: platform selector | ⬜ |
+| 7.14 | UI: PR/MR status widget | ⬜ |
 
 ---
 
@@ -293,6 +295,6 @@ Manager-directed coordination with inter-agent messaging.
 | 5. Stop/Resume | ✅ | Checkpoints, auto-save, state restore |
 | 6. Team Agents | ✅ | Agent pool, DAG execution, file locking |
 | 6+. Collaborative | ✅ | Manager/workers, directives, messaging |
-| 7. Multi-Platform Git | ⬜ | GitHub, GitLab integration |
+| 7. Multi-Platform Git | 🔶 | GitHub + Bitbucket auto-PR, GitLab planned |
 | 8. Service Install | ⬜ | Windows/Linux service |
 | 9. CI/CD & Releases | ⬜ | Pipelines, auto-update |

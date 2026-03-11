@@ -39,14 +39,15 @@ func getLastCommitHash(repo *git.Repository) (string, error) {
 }
 
 // buildAuth creates the appropriate transport.AuthMethod from a RepoConfig.
-// For Bitbucket, the convention is to use "x-token-auth" as the username
-// with the access token as the password.
+// The username varies by platform: GitHub uses "x-access-token",
+// Bitbucket uses "x-token-auth".
 func buildAuth(config db.RepoConfig) transport.AuthMethod {
 	if config.AccessToken == "" {
 		return nil
 	}
+	platform := DetectPlatform(config.URL)
 	return &http.BasicAuth{
-		Username: "x-token-auth",
+		Username: authUsername(platform),
 		Password: config.AccessToken,
 	}
 }

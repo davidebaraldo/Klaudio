@@ -56,24 +56,72 @@ func PostExecution(ctx context.Context, taskName, workspaceDir string, repoConfi
 
 	// Auto-PR if configured.
 	if repoConfig.AutoPR {
+		pr, err := createPlatformPR(ctx, taskName, workspaceDir, repoConfig)
+		if err != nil {
+			return result, err
+		}
+		result.PRUrl = pr.URL
+		slog.Info("auto-created pull request", "pr_url", pr.URL, "pr_id", pr.ID)
+	}
+
+	return result, nil
+}
+
+// createPlatformPR creates a pull request on the appropriate platform (GitHub or Bitbucket)
+// based on the repository URL.
+func createPlatformPR(ctx context.Context, taskName, workspaceDir string, repoConfig db.RepoConfig) (*PullRequest, error) {
+	// Determine the source branch name from the repo.
+	repo, err := openRepo(workspaceDir)
+	if err != nil {
+		return nil, fmt.Errorf("opening repo for PR branch: %w", err)
+	}
+	sourceBranch, err := getCurrentBranch(repo)
+	if err != nil {
+		return nil, fmt.Errorf("getting current branch for PR: %w", err)
+	}
+
+	destination := repoConfig.PRTarget
+	if destination == "" {
+		destination = "main"
+	}
+
+	platform := DetectPlatform(repoConfig.URL)
+
+	switch platform {
+	case PlatformGitHub:
+		owner, repoName, err := ParseGitHubURL(repoConfig.URL)
+		if err != nil {
+			return nil, fmt.Errorf("parsing repo URL for PR: %w", err)
+		}
+
+		ghClient := NewGitHubClient("", nil)
+		pr, err := ghClient.CreatePullRequest(ctx, CreatePROptions{
+			Workspace:   owner,
+			RepoSlug:    repoName,
+			Title:       fmt.Sprintf("[Klaudio] %s", taskName),
+			Description: fmt.Sprintf("Automated pull request created by Klaudio for task: %s", taskName),
+			Source:      sourceBranch,
+			Destination: destination,
+			Reviewers:   repoConfig.PRReviewers,
+			AccessToken: repoConfig.AccessToken,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("creating GitHub PR: %w", err)
+		}
+
+		// Request reviewers separately (GitHub API requires a separate call).
+		if len(repoConfig.PRReviewers) > 0 {
+			if revErr := ghClient.RequestReviewers(ctx, owner, repoName, pr.ID, repoConfig.PRReviewers, repoConfig.AccessToken); revErr != nil {
+				slog.Warn("failed to request reviewers", "error", revErr)
+			}
+		}
+
+		return pr, nil
+
+	case PlatformBitbucket:
 		workspace, repoSlug, err := ParseBitbucketURL(repoConfig.URL)
 		if err != nil {
-			return result, fmt.Errorf("parsing repo URL for PR: %w", err)
-		}
-
-		// Determine the source branch name from the repo.
-		repo, err := openRepo(workspaceDir)
-		if err != nil {
-			return result, fmt.Errorf("opening repo for PR branch: %w", err)
-		}
-		sourceBranch, err := getCurrentBranch(repo)
-		if err != nil {
-			return result, fmt.Errorf("getting current branch for PR: %w", err)
-		}
-
-		destination := repoConfig.PRTarget
-		if destination == "" {
-			destination = "main"
+			return nil, fmt.Errorf("parsing repo URL for PR: %w", err)
 		}
 
 		bbClient := NewBitbucketClient("", nil)
@@ -88,11 +136,11 @@ func PostExecution(ctx context.Context, taskName, workspaceDir string, repoConfi
 			AccessToken: repoConfig.AccessToken,
 		})
 		if err != nil {
-			return result, fmt.Errorf("creating PR: %w", err)
+			return nil, fmt.Errorf("creating Bitbucket PR: %w", err)
 		}
-		result.PRUrl = pr.URL
-		slog.Info("auto-created pull request", "pr_url", pr.URL, "pr_id", pr.ID)
-	}
+		return pr, nil
 
-	return result, nil
+	default:
+		return nil, fmt.Errorf("unsupported platform for auto-PR, cannot detect platform from URL: %s", repoConfig.URL)
+	}
 }
