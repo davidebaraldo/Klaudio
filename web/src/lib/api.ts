@@ -26,6 +26,7 @@ export interface Task {
 	input_files?: string[];
 	output_files?: string[];
 	has_state?: boolean;
+	error?: string;
 	created_at: string;
 	started_at?: string;
 	pr_url?: string | null;
