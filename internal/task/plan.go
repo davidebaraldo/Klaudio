@@ -174,6 +174,7 @@ type SubtaskPromptOpts struct {
 	IsTeamExecution   bool   // Whether this is a multi-agent execution
 	APIURL            string // Klaudio API URL for inter-agent messaging
 	TaskID            string // Task ID for API calls
+	RepoMemory        string // Cached repo analysis content (optional)
 }
 
 // BuildSubtaskPrompt creates the prompt for a subtask executor, adding context
@@ -189,6 +190,13 @@ func BuildSubtaskPrompt(subtask db.Subtask, allSubtasks []db.Subtask, taskPrompt
 	b.WriteString("## Overall Task\n")
 	b.WriteString(taskPrompt)
 	b.WriteString("\n\n")
+
+	// Cached repo analysis
+	if o.RepoMemory != "" {
+		b.WriteString("## Repository Context\n")
+		b.WriteString(o.RepoMemory)
+		b.WriteString("\n\n")
+	}
 
 	// Role-specific hint from team template
 	if o.RolePromptHint != "" {

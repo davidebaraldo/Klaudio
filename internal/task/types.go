@@ -10,4 +10,5 @@ type ExecutionPlan struct {
 	Subtasks   []db.Subtask
 	TaskPrompt string // original task prompt, used to build agent prompts
 	Mode       string // "sequential" (default, DAG-based) or "collaborative" (manager + concurrent workers)
+	RepoMemory string // cached repo analysis content (optional, from repo memory)
 }

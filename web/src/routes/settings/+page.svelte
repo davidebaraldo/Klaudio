@@ -35,6 +35,7 @@
 	let newTplAutoPush = $state(false);
 	let newTplAutoPr = $state(false);
 	let newTplPrTarget = $state('');
+	let newTplEnableMemory = $state(false);
 	let savingTpl = $state(false);
 
 	// New team template
@@ -98,7 +99,8 @@
 				auto_commit: newTplAutoCommit,
 				auto_push: newTplAutoPush,
 				auto_pr: newTplAutoPr,
-				pr_target: newTplPrTarget.trim() || undefined
+				pr_target: newTplPrTarget.trim() || undefined,
+				enable_memory: newTplEnableMemory
 			});
 			newTplName = '';
 			newTplUrl = '';
@@ -109,6 +111,7 @@
 			newTplAutoPush = false;
 			newTplAutoPr = false;
 			newTplPrTarget = '';
+			newTplEnableMemory = false;
 			success = 'Template created.';
 			await loadTemplates();
 		} catch (e) {
@@ -286,6 +289,9 @@
 							{#if tpl.auto_pr}
 								<span class="px-1.5 py-0.5 text-[10px] rounded bg-green-900/40 text-green-400 border border-green-800">PR</span>
 							{/if}
+							{#if tpl.enable_memory}
+								<span class="px-1.5 py-0.5 text-[10px] rounded bg-cyan-900/40 text-cyan-400 border border-cyan-800">memory</span>
+							{/if}
 						</div>
 					</div>
 				{/each}
@@ -359,6 +365,11 @@
 						class="bg-zinc-800 text-zinc-100 px-3 py-1.5 rounded border border-zinc-700 focus:border-zinc-500 focus:outline-none text-sm"
 					/>
 				{/if}
+				<h4 class="text-xs text-zinc-500 mt-2">Analysis</h4>
+				<label class="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+					<input type="checkbox" bind:checked={newTplEnableMemory} class="rounded bg-zinc-800 border-zinc-600" />
+					Enable repo memory (cache codebase analysis per commit)
+				</label>
 			</div>
 			<button
 				onclick={addTemplate}

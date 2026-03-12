@@ -113,8 +113,24 @@ type RepoTemplate struct {
 	AutoPR        bool      `json:"auto_pr"`
 	PRTarget      string    `json:"pr_target"`
 	PRReviewers   *string   `json:"pr_reviewers,omitempty"` // JSON array
+	EnableMemory  bool      `json:"enable_memory"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// RepoMemory holds a cached codebase analysis for a repo template at a specific commit.
+type RepoMemory struct {
+	ID             string    `json:"id"`
+	RepoTemplateID string    `json:"repo_template_id"`
+	Branch         string    `json:"branch"`
+	CommitHash     string    `json:"commit_hash"`
+	Content        string    `json:"content"`               // Markdown summary
+	FileTree       *string   `json:"file_tree,omitempty"`   // JSON
+	Languages      *string   `json:"languages,omitempty"`   // JSON
+	Frameworks     *string   `json:"frameworks,omitempty"`  // JSON
+	KeyFiles       *string   `json:"key_files,omitempty"`   // JSON
+	Dependencies   *string   `json:"dependencies,omitempty"`// JSON
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // Checkpoint captures the full state of a task at a point in time for resume.
@@ -204,13 +220,15 @@ type AgentMessage struct {
 
 // RepoConfig holds repository configuration for a task (stored as JSON in Task.RepoConfig).
 type RepoConfig struct {
-	URL         string   `json:"url"`
-	Branch      string   `json:"branch"`
-	AccessToken string   `json:"access_token"`
-	AutoBranch  bool     `json:"auto_branch"`
-	AutoCommit  bool     `json:"auto_commit"`
-	AutoPush    bool     `json:"auto_push"`
-	AutoPR      bool     `json:"auto_pr"`
-	PRTarget    string   `json:"pr_target"`
-	PRReviewers []string `json:"pr_reviewers,omitempty"`
+	URL            string   `json:"url"`
+	Branch         string   `json:"branch"`
+	AccessToken    string   `json:"access_token"`
+	AutoBranch     bool     `json:"auto_branch"`
+	AutoCommit     bool     `json:"auto_commit"`
+	AutoPush       bool     `json:"auto_push"`
+	AutoPR         bool     `json:"auto_pr"`
+	PRTarget       string   `json:"pr_target"`
+	PRReviewers    []string `json:"pr_reviewers,omitempty"`
+	RepoTemplateID string   `json:"repo_template_id,omitempty"`
+	EnableMemory   bool     `json:"enable_memory,omitempty"`
 }

@@ -115,6 +115,7 @@ func (o *Orchestrator) Run(ctx context.Context, task *db.Task, plan *ExecutionPl
 				IsTeamExecution:   isTeam,
 				APIURL:            o.agentAPIURL(),
 				TaskID:            task.ID,
+				RepoMemory:        plan.RepoMemory,
 			})
 
 			ag, err := o.pool.Spawn(ctx, agent.SpawnOpts{

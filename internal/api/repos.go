@@ -24,6 +24,7 @@ type RepoTemplateRequest struct {
 	AutoPR        bool     `json:"auto_pr"`
 	PRTarget      string   `json:"pr_target"`
 	PRReviewers   []string `json:"pr_reviewers,omitempty"`
+	EnableMemory  bool     `json:"enable_memory"`
 }
 
 // RepoTemplateResponse is the JSON response for a repo template.
@@ -38,6 +39,7 @@ type RepoTemplateResponse struct {
 	AutoPR        bool      `json:"auto_pr"`
 	PRTarget      string    `json:"pr_target"`
 	PRReviewers   []string  `json:"pr_reviewers,omitempty"`
+	EnableMemory  bool      `json:"enable_memory"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
@@ -97,6 +99,7 @@ func (h *Handlers) CreateRepoTemplate(w http.ResponseWriter, r *http.Request) {
 		AutoPush:      req.AutoPush,
 		AutoPR:        req.AutoPR,
 		PRTarget:      req.PRTarget,
+		EnableMemory:  req.EnableMemory,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
@@ -191,6 +194,7 @@ func (h *Handlers) UpdateRepoTemplate(w http.ResponseWriter, r *http.Request) {
 	existing.AutoPush = req.AutoPush
 	existing.AutoPR = req.AutoPR
 	existing.PRTarget = req.PRTarget
+	existing.EnableMemory = req.EnableMemory
 
 	// Only update the access token if provided; otherwise keep the existing one.
 	if req.AccessToken != nil {
@@ -245,6 +249,60 @@ func (h *Handlers) DeleteRepoTemplate(w http.ResponseWriter, r *http.Request) {
 
 // repoTemplateToResponse converts a db.RepoTemplate to a RepoTemplateResponse.
 // The access token is intentionally omitted from responses for security.
+// GetRepoMemory handles GET /api/repo-templates/{templateID}/memory.
+func (h *Handlers) GetRepoMemory(w http.ResponseWriter, r *http.Request) {
+	templateID := chi.URLParam(r, "templateID")
+	if templateID == "" {
+		writeError(w, http.StatusBadRequest, "templateID is required")
+		return
+	}
+
+	rt, err := h.svc.DB.GetRepoTemplate(r.Context(), templateID)
+	if err != nil || rt == nil {
+		writeError(w, http.StatusNotFound, "repo template not found")
+		return
+	}
+
+	branch := r.URL.Query().Get("branch")
+	if branch == "" {
+		branch = rt.DefaultBranch
+	}
+
+	memory, err := h.svc.DB.GetRepoMemory(r.Context(), templateID, branch)
+	if err != nil {
+		slog.Error("failed to get repo memory", "template_id", templateID, "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to get repo memory")
+		return
+	}
+	if memory == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"memory": nil,
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"memory": memory,
+	})
+}
+
+// DeleteRepoMemory handles DELETE /api/repo-templates/{templateID}/memory.
+func (h *Handlers) DeleteRepoMemory(w http.ResponseWriter, r *http.Request) {
+	templateID := chi.URLParam(r, "templateID")
+	if templateID == "" {
+		writeError(w, http.StatusBadRequest, "templateID is required")
+		return
+	}
+
+	if err := h.svc.DB.DeleteRepoMemoriesByTemplate(r.Context(), templateID); err != nil {
+		slog.Error("failed to delete repo memory", "template_id", templateID, "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to delete repo memory")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 func repoTemplateToResponse(rt *db.RepoTemplate) RepoTemplateResponse {
 	resp := RepoTemplateResponse{
 		ID:            rt.ID,
@@ -256,6 +314,7 @@ func repoTemplateToResponse(rt *db.RepoTemplate) RepoTemplateResponse {
 		AutoPush:      rt.AutoPush,
 		AutoPR:        rt.AutoPR,
 		PRTarget:      rt.PRTarget,
+		EnableMemory:  rt.EnableMemory,
 		CreatedAt:     rt.CreatedAt,
 		UpdatedAt:     rt.UpdatedAt,
 	}

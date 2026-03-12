@@ -26,6 +26,7 @@ type Executor struct {
 	cfg        *config.Config
 	stateStore *state.StateStore
 	streamHub  *stream.Hub
+	repoMemory string // cached repo analysis content (optional)
 }
 
 // NewExecutor creates a new Executor.
@@ -180,7 +181,9 @@ func (e *Executor) executeSubtask(ctx context.Context, task *db.Task, plan *db.P
 	logger := slog.With("task_id", task.ID, "subtask_id", subtask.ID, "component", "executor")
 
 	// Build the prompt with context from dependencies
-	prompt := BuildSubtaskPrompt(*subtask, allSubtasks, task.Prompt)
+	prompt := BuildSubtaskPrompt(*subtask, allSubtasks, task.Prompt, SubtaskPromptOpts{
+		RepoMemory: e.repoMemory,
+	})
 
 	// Resolve workspace path
 	workspaceDir := filepath.Join(e.cfg.Storage.DataDir, "workspaces", task.ID)
