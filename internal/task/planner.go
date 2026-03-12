@@ -53,6 +53,8 @@ RULES:
 - Do NOT modify any file. Use only read operations.
 - If something is unclear, you MUST ask questions before producing the plan.
 - Analyze the code structure, patterns, dependencies, and existing tests.
+- You can ONLY access files inside the workspace (/home/agent/workspace). If the task references files or paths outside the project folder, you cannot read or analyze them. In that case, note this limitation in the plan and ask the user to provide the files as input.
+- All output files listed in files_involved MUST be paths inside the workspace. Agents cannot create files outside of it — the platform only shows files within the workspace to the user.
 
 Analyze the following task and produce a structured execution plan.
 

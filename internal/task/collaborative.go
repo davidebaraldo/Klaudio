@@ -644,6 +644,7 @@ func BuildFixWorkerPrompt(subtask db.Subtask, allSubtasks []db.Subtask, taskProm
 
 	b.WriteString(workerApprovalLoopInstructions(opts.APIURL, opts.TaskID, subtask.ID))
 	b.WriteString(APICommsInstructions(opts.APIURL, opts.TaskID, subtask.ID))
+	b.WriteString(workspaceFileRule)
 
 	return b.String()
 }
@@ -851,6 +852,7 @@ func BuildCollaborativeWorkerPrompt(subtask db.Subtask, allSubtasks []db.Subtask
 	b.WriteString("\n")
 	b.WriteString(workerApprovalLoopInstructions(opts.APIURL, opts.TaskID, subtask.ID))
 	b.WriteString(APICommsInstructions(opts.APIURL, opts.TaskID, subtask.ID))
+	b.WriteString(workspaceFileRule)
 
 	return b.String()
 }
