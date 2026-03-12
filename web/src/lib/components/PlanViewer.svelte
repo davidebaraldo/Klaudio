@@ -1,5 +1,6 @@
 <script lang="ts">
 	import StatusBadge from './StatusBadge.svelte';
+	import TruncatedText from './TruncatedText.svelte';
 	import type { Plan, Subtask } from '$lib/api';
 	import { updatePlan, approveTask } from '$lib/api';
 
@@ -129,7 +130,9 @@
 							placeholder="Subtask prompt..."
 						></textarea>
 					{:else if subtask.description}
-						<p class="text-sm text-zinc-400">{subtask.description}</p>
+						<p class="text-sm text-zinc-400">
+							<TruncatedText text={subtask.description} maxLength={200} title="{subtask.name} — Description" />
+						</p>
 					{/if}
 
 					{#if subtask.depends_on && subtask.depends_on.length > 0}

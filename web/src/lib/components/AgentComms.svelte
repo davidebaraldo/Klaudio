@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { getAgentMessages, type AgentMessage, type Subtask } from '$lib/api';
+	import TruncatedText from './TruncatedText.svelte';
 
 	interface Props {
 		taskId: string;
@@ -265,8 +266,9 @@
 							</div>
 							<span class="text-[10px] text-zinc-500">{formatTime(msg.created_at)}</span>
 						</div>
-						<pre
-							class="text-xs text-zinc-400 whitespace-pre-wrap font-mono max-h-40 overflow-y-auto">{msg.content.slice(0, 500)}{msg.content.length > 500 ? '...' : ''}</pre>
+						<div class="text-xs text-zinc-400">
+							<TruncatedText text={msg.content} maxLength={500} title="{subtaskLabel(msg.from_subtask_id || '')} — Context" preformatted />
+						</div>
 					</div>
 				{/each}
 			</div>
@@ -295,7 +297,9 @@
 								{/if}
 								<span class="text-[10px] text-zinc-600 ml-auto">{formatTime(msg.created_at)}</span>
 							</div>
-							<p class="text-xs text-zinc-400">{msg.content}</p>
+							<p class="text-xs text-zinc-400">
+								<TruncatedText text={msg.content} maxLength={300} title="{subtaskLabel(msg.from_subtask_id || '')} — Message" />
+							</p>
 						</div>
 					</div>
 				{/each}

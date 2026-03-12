@@ -16,6 +16,7 @@
 	import { createTaskStream, type StreamEvent } from '$lib/stores/websocket';
 	import { refreshTask, loadTasks } from '$lib/stores/tasks';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
+	import TruncatedText from '$lib/components/TruncatedText.svelte';
 	import PlanViewer from '$lib/components/PlanViewer.svelte';
 	import FileManager from '$lib/components/FileManager.svelte';
 	import MessageInput from '$lib/components/MessageInput.svelte';
@@ -209,7 +210,9 @@
 					<StatusBadge status={task.status} />
 				</div>
 				{#if task.prompt}
-					<p class="text-sm text-zinc-500 max-w-2xl">{task.prompt}</p>
+					<p class="text-sm text-zinc-500 max-w-2xl">
+						<TruncatedText text={task.prompt} maxLength={300} title="Task Prompt" />
+					</p>
 				{/if}
 			</div>
 			<div class="flex gap-2 shrink-0">
