@@ -175,6 +175,84 @@ Check .klaudio/context/ for summaries from agents that completed before you.
 `, apiURL, taskID, subtaskID, apiURL, taskID)
 }
 
+// RespawnRequest represents a manager's request to respawn a worker with fix instructions.
+type RespawnRequest struct {
+	SubtaskID    string
+	Instructions string
+}
+
+// CheckRespawnRequests scans messages after afterID for a RESPAWN_WORKERS signal from the manager.
+// Returns the parsed requests and the highest message ID seen (for cursor tracking).
+func (cs *CommsService) CheckRespawnRequests(ctx context.Context, taskID string, afterID int64) ([]RespawnRequest, int64) {
+	messages, err := cs.db.ListAgentMessagesAfterID(ctx, taskID, afterID)
+	if err != nil {
+		slog.Warn("failed to poll messages for respawn", "task_id", taskID, "error", err)
+		return nil, afterID
+	}
+
+	highestID := afterID
+	for _, m := range messages {
+		if m.ID > highestID {
+			highestID = m.ID
+		}
+
+		// Only look at messages from the manager
+		if m.FromSubtaskID == nil || *m.FromSubtaskID != "manager" {
+			continue
+		}
+		if m.MsgType != "message" {
+			continue
+		}
+
+		if !strings.Contains(m.Content, "[RESPAWN_WORKERS]") {
+			continue
+		}
+
+		reqs := parseRespawnContent(m.Content)
+		if len(reqs) > 0 {
+			return reqs, highestID
+		}
+	}
+
+	return nil, highestID
+}
+
+// parseRespawnContent parses the RESPAWN_WORKERS message format:
+//
+//	[RESPAWN_WORKERS]
+//	subtask-id-1: fix instructions for this worker
+//	subtask-id-2: fix instructions for this worker
+func parseRespawnContent(content string) []RespawnRequest {
+	// Find everything after [RESPAWN_WORKERS]
+	idx := strings.Index(content, "[RESPAWN_WORKERS]")
+	if idx < 0 {
+		return nil
+	}
+	body := strings.TrimSpace(content[idx+len("[RESPAWN_WORKERS]"):])
+
+	var reqs []RespawnRequest
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		subtaskID := strings.TrimSpace(parts[0])
+		instructions := strings.TrimSpace(parts[1])
+		if subtaskID == "" {
+			continue
+		}
+		reqs = append(reqs, RespawnRequest{
+			SubtaskID:    subtaskID,
+			Instructions: instructions,
+		})
+	}
+	return reqs
+}
+
 // ExtractAgentSummary tries to extract a meaningful summary from the agent's output.
 func ExtractAgentSummary(output string, maxLen int) string {
 	if maxLen <= 0 {

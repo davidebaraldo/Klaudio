@@ -173,50 +173,160 @@ func (o *Orchestrator) RunCollaborative(ctx context.Context, task *db.Task, plan
 	}
 
 	// =============================================
-	// PHASE 3: Wait for all agents to complete
+	// PHASE 3: Wait for workers, handle fix rounds
 	// =============================================
-	allWorkersDoneNotified := false
+	//
+	// After all workers complete, the orchestrator sends ALL_WORKERS_DONE.
+	// The manager can then either:
+	//   a) Exit normally → orchestration ends
+	//   b) Send [RESPAWN_WORKERS] with a list of subtask IDs and fix instructions
+	//      → the orchestrator respawns those workers and waits again
+	// This loop repeats indefinitely until the manager is satisfied and exits.
+	round := 0
+	var msgCursor int64 // tracks last seen message ID for respawn polling
+
 	for {
-		runningMu.Lock()
-		count := len(running)
-		runningMu.Unlock()
-		if count == 0 {
-			break
-		}
-
-		select {
-		case <-ctx.Done():
-			logger.Info("collaborative orchestration cancelled")
-			return ctx.Err()
-		case ev := <-completionCh:
-			o.handleCollaborativeCompletion(ctx, ev, task.ID, plan, absWorkspace, &runningMu, running, logger)
-
-			// After processing, check if all workers are done (manager may still be running)
-			if !allWorkersDoneNotified {
-				runningMu.Lock()
-				onlyManager := true
-				for _, stID := range running {
-					if stID != "manager" {
-						onlyManager = false
-						break
-					}
-				}
-				runningMu.Unlock()
-
-				if onlyManager {
-					// All workers finished — notify the manager
-					allWorkersDoneNotified = true
-					logger.Info("all workers completed, sending ALL_WORKERS_DONE to manager")
-					o.sendSystemMessage(ctx, task.ID, "ALL_WORKERS_DONE",
-						o.buildWorkersSummary(plan))
+		// --- Wait for all workers to finish (manager stays running) ---
+		allWorkersDone := false
+		for !allWorkersDone {
+			runningMu.Lock()
+			count := len(running)
+			onlyManager := true
+			for _, stID := range running {
+				if stID != "manager" {
+					onlyManager = false
+					break
 				}
 			}
+			runningMu.Unlock()
+
+			if count == 0 {
+				// Manager also exited — we're completely done
+				goto done
+			}
+
+			if onlyManager {
+				allWorkersDone = true
+				break
+			}
+
+			select {
+			case <-ctx.Done():
+				logger.Info("collaborative orchestration cancelled")
+				return ctx.Err()
+			case ev := <-completionCh:
+				o.handleCollaborativeCompletion(ctx, ev, task.ID, plan, absWorkspace, &runningMu, running, logger)
+			}
 		}
+
+		// --- All workers finished — notify the manager ---
+		round++
+		logger.Info("all workers completed, sending ALL_WORKERS_DONE to manager", "round", round)
+		o.sendSystemMessage(ctx, task.ID, "ALL_WORKERS_DONE",
+			o.buildWorkersSummary(plan))
+
+		o.recordEvent(ctx, task.ID, "fix_round.workers_done", map[string]string{
+			"round": fmt.Sprintf("%d", round),
+		})
+
+		// --- Wait for manager decision: exit or RESPAWN_WORKERS ---
+		respawnReqs := o.waitForManagerDecision(ctx, task.ID, completionCh, &runningMu, running, &msgCursor, logger)
+
+		if respawnReqs == nil {
+			// Manager exited (or context cancelled) — no more rounds
+			goto done
+		}
+
+		// --- Manager requested respawns — launch fix workers ---
+		logger.Info("manager requested worker respawn", "round", round+1, "count", len(respawnReqs))
+
+		o.recordEvent(ctx, task.ID, "fix_round.respawn", map[string]string{
+			"round":   fmt.Sprintf("%d", round+1),
+			"workers": fmt.Sprintf("%d", len(respawnReqs)),
+		})
+
+		for _, req := range respawnReqs {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
+			subtask := o.findSubtask(plan, req.SubtaskID)
+			if subtask == nil {
+				logger.Warn("manager requested respawn of unknown subtask", "subtask_id", req.SubtaskID)
+				continue
+			}
+
+			role := agent.AgentRole(subtask.AgentRole)
+			if role == "" {
+				role = agent.RoleDeveloper
+			}
+
+			prompt := BuildFixWorkerPrompt(*subtask, plan.Subtasks, plan.TaskPrompt, req.Instructions, round+1, CollaborativeWorkerOpts{
+				Directive:      o.comms.ReadDirective(absWorkspace, subtask.ID),
+				RolePromptHint: roleHints[subtask.AgentRole],
+				APIURL:         apiURL,
+				TaskID:         task.ID,
+			})
+
+			ag, spawnErr := o.pool.Spawn(ctx, agent.SpawnOpts{
+				TaskID:       task.ID,
+				SubtaskID:    subtask.ID,
+				Role:         role,
+				Prompt:       prompt,
+				WorkspaceDir: absWorkspace,
+			})
+			if spawnErr != nil {
+				logger.Error("failed to respawn worker", "subtask_id", req.SubtaskID, "error", spawnErr)
+				o.sendSystemMessage(ctx, task.ID, "RESPAWN_FAILED",
+					fmt.Sprintf("Failed to respawn %s: %s", req.SubtaskID, spawnErr))
+				continue
+			}
+
+			// Update plan state
+			for i := range plan.Subtasks {
+				if plan.Subtasks[i].ID == subtask.ID {
+					plan.Subtasks[i].Status = "running"
+					plan.Subtasks[i].AgentID = ag.ID
+					break
+				}
+			}
+			o.updatePlanSubtasks(ctx, plan)
+
+			runningMu.Lock()
+			running[ag.ID] = subtask.ID
+			runningMu.Unlock()
+
+			go func(agentID, stID string) {
+				result := <-o.pool.Wait(agentID)
+				completionCh <- completionEvent{
+					AgentID:   agentID,
+					SubtaskID: stID,
+					Result:    result,
+				}
+			}(ag.ID, subtask.ID)
+
+			o.recordEvent(ctx, task.ID, "subtask.respawned", map[string]string{
+				"subtask_id": subtask.ID,
+				"agent_id":   ag.ID,
+				"round":      fmt.Sprintf("%d", round+1),
+			})
+
+			logger.Info("respawned fix worker", "subtask_id", subtask.ID, "agent_id", ag.ID, "round", round+1)
+		}
+
+		// Notify the manager that respawned workers are running
+		o.sendSystemMessage(ctx, task.ID, "WORKERS_RESPAWNED",
+			fmt.Sprintf("Respawned %d worker(s) for fix round %d. Monitoring their progress.", len(respawnReqs), round+1))
+
+		// Loop back to wait for these new workers to complete
 	}
 
+done:
 	// Save manager context
 	o.comms.SaveSubtaskContext(ctx, task.ID, "manager", managerAg.ID, "Team Manager",
-		"Coordinated workers and monitored execution to completion.", absWorkspace)
+		fmt.Sprintf("Coordinated workers across %d round(s) and monitored execution to completion.", round), absWorkspace)
 
 	o.recordEvent(ctx, task.ID, "manager.completed", map[string]string{
 		"agent_id": managerAg.ID,
@@ -416,6 +526,128 @@ func (o *Orchestrator) handleCollaborativeCompletion(
 	}
 }
 
+// waitForManagerDecision blocks until the manager either exits or sends a RESPAWN_WORKERS message.
+// Returns nil if the manager exited (or context was cancelled), or the list of respawn requests.
+func (o *Orchestrator) waitForManagerDecision(
+	ctx context.Context,
+	taskID string,
+	completionCh chan completionEvent,
+	runningMu *sync.Mutex,
+	running map[string]string,
+	msgCursor *int64,
+	logger *slog.Logger,
+) []RespawnRequest {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+
+		case ev := <-completionCh:
+			// An agent exited — if it's the manager, we're done
+			runningMu.Lock()
+			delete(running, ev.AgentID)
+			runningMu.Unlock()
+
+			if ev.SubtaskID == "manager" {
+				if ev.Result.ExitCode == 0 && ev.Result.Error == nil {
+					logger.Info("team manager exited — no more fix rounds requested")
+				} else {
+					logger.Warn("team manager exited with error",
+						"exit_code", ev.Result.ExitCode, "error", ev.Result.Error)
+				}
+				return nil
+			}
+
+		case <-ticker.C:
+			// Poll for RESPAWN_WORKERS message from manager
+			reqs, newCursor := o.comms.CheckRespawnRequests(ctx, taskID, *msgCursor)
+			*msgCursor = newCursor
+			if len(reqs) > 0 {
+				logger.Info("manager sent RESPAWN_WORKERS", "count", len(reqs))
+				return reqs
+			}
+		}
+	}
+}
+
+// findSubtask returns a pointer to the subtask in the plan with the given ID, or nil.
+func (o *Orchestrator) findSubtask(plan *ExecutionPlan, subtaskID string) *db.Subtask {
+	for i := range plan.Subtasks {
+		if plan.Subtasks[i].ID == subtaskID {
+			return &plan.Subtasks[i]
+		}
+	}
+	return nil
+}
+
+// BuildFixWorkerPrompt creates the prompt for a worker respawned for a fix round.
+// It includes the original subtask context plus the manager's fix instructions.
+func BuildFixWorkerPrompt(subtask db.Subtask, allSubtasks []db.Subtask, taskPrompt, fixInstructions string, round int, opts CollaborativeWorkerOpts) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("You are a worker agent respawned for **fix round %d**.\n\n", round))
+	b.WriteString("The team already completed an initial round of work. The Team Manager reviewed the results ")
+	b.WriteString("and determined that your subtask needs additional fixes.\n\n")
+
+	b.WriteString("## FIX INSTRUCTIONS FROM MANAGER (DO THIS FIRST)\n\n")
+	b.WriteString(fixInstructions)
+	b.WriteString("\n\n")
+
+	b.WriteString("## Overall Task\n")
+	b.WriteString(taskPrompt)
+	b.WriteString("\n\n")
+
+	if opts.RolePromptHint != "" {
+		b.WriteString("## Your Role\n")
+		b.WriteString(opts.RolePromptHint)
+		b.WriteString("\n\n")
+	}
+
+	if opts.Directive != "" {
+		b.WriteString("## Original Directives from Team Manager\n")
+		b.WriteString(opts.Directive)
+		b.WriteString("\n\n")
+	}
+
+	b.WriteString("## Your Team\n")
+	b.WriteString("Status of all subtasks after the previous round:\n")
+	for _, st := range allSubtasks {
+		marker := ""
+		if st.ID == subtask.ID {
+			marker = " ← THIS IS YOU (respawned)"
+		}
+		b.WriteString(fmt.Sprintf("- **%s** (ID: %s): %s%s\n", st.Name, st.ID, st.Status, marker))
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## Your Subtask\n")
+	b.WriteString(fmt.Sprintf("**ID**: %s\n", subtask.ID))
+	b.WriteString(fmt.Sprintf("**Name**: %s\n", subtask.Name))
+	b.WriteString(fmt.Sprintf("**Description**: %s\n\n", subtask.Description))
+	b.WriteString("## Original Instructions\n")
+	b.WriteString(subtask.Prompt)
+	b.WriteString("\n")
+
+	if len(subtask.FilesInvolved) > 0 {
+		b.WriteString("\n## Files to work with\n")
+		for _, f := range subtask.FilesInvolved {
+			b.WriteString("- " + f + "\n")
+		}
+	}
+
+	b.WriteString("\n## Important\n")
+	b.WriteString("- Focus on the FIX INSTRUCTIONS above — that is your primary objective this round\n")
+	b.WriteString("- The codebase already has work from the previous round, so do NOT start from scratch\n")
+	b.WriteString("- When done, follow the approval loop below — do NOT exit until the manager approves\n\n")
+
+	b.WriteString(workerApprovalLoopInstructions(opts.APIURL, opts.TaskID, subtask.ID))
+	b.WriteString(APICommsInstructions(opts.APIURL, opts.TaskID, subtask.ID))
+
+	return b.String()
+}
+
 // resolveTeamMode looks up the team template for a task and returns its mode.
 func (o *Orchestrator) resolveTeamMode(ctx context.Context, task *db.Task) string {
 	if task.TeamTemplate == nil || *task.TeamTemplate == "" {
@@ -465,7 +697,9 @@ func BuildManagerPrompt(subtasks []db.Subtask, taskPrompt string, roleHints map[
 	b.WriteString("3. **Coordinate** if conflicts arise (e.g., two workers editing same interface)\n")
 	b.WriteString("4. **Send guidance** when workers report completion or problems\n")
 	b.WriteString("5. **Wait for the ALL_WORKERS_DONE signal** — the orchestrator will send a system message with this signal when all workers have finished\n")
-	b.WriteString("6. When you see ALL_WORKERS_DONE, write a final summary and **exit**\n\n")
+	b.WriteString("6. When you see ALL_WORKERS_DONE, **review the results** and decide:\n")
+	b.WriteString("   - If everything looks good → write a final summary and **exit**\n")
+	b.WriteString("   - If fixes are needed → send a **RESPAWN_WORKERS** message (see below) to relaunch specific workers\n\n")
 
 	b.WriteString("## How to Write Directives\n\n")
 	b.WriteString("For EACH worker, create a file at `.klaudio/directives/{subtask_id}.md` with:\n")
@@ -481,12 +715,50 @@ func BuildManagerPrompt(subtasks []db.Subtask, taskPrompt string, roleHints map[
 	b.WriteString("- File ownership (which worker owns which files)\n")
 	b.WriteString("- Execution order recommendations\n\n")
 
+	b.WriteString("## Respawning Workers for Fixes\n\n")
+	b.WriteString("After receiving ALL_WORKERS_DONE, if you determine that some workers need to fix their work, ")
+	b.WriteString("you can request the orchestrator to respawn them. Send a message with the exact format:\n\n")
+	b.WriteString("```bash\n")
+	b.WriteString(fmt.Sprintf("curl -s -X POST %s/api/tasks/%s/messages \\\n", apiURL, taskID))
+	b.WriteString("  -H \"Content-Type: application/json\" \\\n")
+	b.WriteString("  -d '{\"from\": \"manager\", \"content\": \"[RESPAWN_WORKERS]\\nsubtask-id-1: Description of what to fix\\nsubtask-id-2: Description of what to fix\"}'\n")
+	b.WriteString("```\n\n")
+	b.WriteString("The orchestrator will respawn those workers with your fix instructions and send you a ")
+	b.WriteString("`[WORKERS_RESPAWNED]` confirmation. You then continue monitoring until those workers finish, ")
+	b.WriteString("and you will receive another ALL_WORKERS_DONE. You can repeat this as many times as needed.\n\n")
+	b.WriteString("### Inline fixes (workers stay alive)\n\n")
+	b.WriteString("Workers do NOT exit when they finish — they wait for your approval. ")
+	b.WriteString("When a worker sends `[WORK_DONE]`, you can:\n\n")
+	b.WriteString("**Approve** (worker exits):\n")
+	b.WriteString("```bash\n")
+	b.WriteString(fmt.Sprintf("curl -s -X POST %s/api/tasks/%s/messages \\\n", apiURL, taskID))
+	b.WriteString("  -H \"Content-Type: application/json\" \\\n")
+	b.WriteString("  -d '{\"from\": \"manager\", \"to\": \"SUBTASK_ID\", \"content\": \"[WORKER_APPROVED] Good work!\"}'\n")
+	b.WriteString("```\n\n")
+	b.WriteString("**Request more work** (worker continues):\n")
+	b.WriteString("```bash\n")
+	b.WriteString(fmt.Sprintf("curl -s -X POST %s/api/tasks/%s/messages \\\n", apiURL, taskID))
+	b.WriteString("  -H \"Content-Type: application/json\" \\\n")
+	b.WriteString("  -d '{\"from\": \"manager\", \"to\": \"SUBTASK_ID\", \"content\": \"[CONTINUE_WORK] Please fix: description of what needs fixing\"}'\n")
+	b.WriteString("```\n\n")
+	b.WriteString("This is the **preferred** method for small fixes — it avoids respawning the worker entirely.\n\n")
+	b.WriteString("### Full respawn (for larger rework)\n\n")
+	b.WriteString("Use RESPAWN_WORKERS only when a worker has already exited or needs a complete redo.\n")
+	b.WriteString("The inline CONTINUE_WORK approach above is faster and preserves the worker's context.\n\n")
+	b.WriteString("### Review checklist\n")
+	b.WriteString("- Inspect the code the workers produced (read the relevant files)\n")
+	b.WriteString("- Run tests or build commands to verify correctness\n")
+	b.WriteString("- Check if workers followed the shared contracts from your directives\n")
+	b.WriteString("- Check for integration issues between what different workers produced\n")
+	b.WriteString("- Only exit when you have approved ALL workers and are satisfied with the overall result\n\n")
+
 	b.WriteString("## Important Rules\n")
 	b.WriteString("- Do NOT write any production code. You only write directives and messages.\n")
-	b.WriteString("- Be specific and concrete in your directives.\n")
+	b.WriteString("- Be specific and concrete in your directives and fix instructions.\n")
 	b.WriteString("- Use exact function signatures, types, and paths.\n")
 	b.WriteString("- After writing directives, enter monitoring mode — poll messages and respond.\n")
-	b.WriteString("- Do NOT exit until you see the ALL_WORKERS_DONE system message.\n\n")
+	b.WriteString("- Do NOT exit until you have reviewed all results and are satisfied.\n")
+	b.WriteString("- You may request as many fix rounds as needed — there is no limit.\n\n")
 
 	b.WriteString("## Monitoring Loop\n\n")
 	b.WriteString("After writing directives, use this loop to monitor workers:\n")
@@ -494,7 +766,8 @@ func BuildManagerPrompt(subtasks []db.Subtask, taskPrompt string, roleHints map[
 	b.WriteString("# Poll for new messages (repeat every 10-15 seconds)\n")
 	b.WriteString(fmt.Sprintf("curl -s %s/api/tasks/%s/messages | jq '.messages[] | select(.msg_type==\"message\" or .msg_type==\"system\")'\n", apiURL, taskID))
 	b.WriteString("```\n\n")
-	b.WriteString("When you see `[ALL_WORKERS_DONE]` in a system message, write your final summary and exit.\n")
+	b.WriteString("When you see `[ALL_WORKERS_DONE]`, review the code and decide: exit if satisfied, or send RESPAWN_WORKERS.\n")
+	b.WriteString("When you see `[WORKERS_RESPAWNED]`, continue monitoring — another ALL_WORKERS_DONE will follow.\n")
 	b.WriteString("When you see `[WORKER_COMPLETED]` or `[WORKER_FAILED]`, you can send feedback or guidance.\n\n")
 
 	b.WriteString(APICommsInstructions(apiURL, taskID, "manager"))
@@ -576,9 +849,56 @@ func BuildCollaborativeWorkerPrompt(subtask db.Subtask, allSubtasks []db.Subtask
 	}
 
 	b.WriteString("\n")
+	b.WriteString(workerApprovalLoopInstructions(opts.APIURL, opts.TaskID, subtask.ID))
 	b.WriteString(APICommsInstructions(opts.APIURL, opts.TaskID, subtask.ID))
 
 	return b.String()
+}
+
+// workerApprovalLoopInstructions returns prompt text instructing workers to wait for
+// manager approval before exiting. The worker stays alive, polling for messages,
+// and can receive additional fix instructions without being respawned.
+func workerApprovalLoopInstructions(apiURL, taskID, subtaskID string) string {
+	return fmt.Sprintf(`## CRITICAL: Do NOT exit when done — Wait for Manager Approval
+
+After completing your work, you MUST follow this protocol:
+
+1. **Broadcast** a summary of what you did:
+`+"```bash"+`
+curl -s -X POST %s/api/tasks/%s/messages \
+  -H "Content-Type: application/json" \
+  -d '{"from": "%s", "content": "[WORK_DONE] Summary of completed work here"}'
+`+"```"+`
+
+2. **Enter an approval loop** — poll for messages from the manager every 10 seconds:
+`+"```bash"+`
+while true; do
+  MSG=$(curl -s %s/api/tasks/%s/messages | jq -r '.messages[] | select(.to_subtask_id=="%s" or .to_subtask_id==null) | select(.from_subtask_id=="manager") | .content' | tail -1)
+  if echo "$MSG" | grep -q '\[WORKER_APPROVED\]'; then
+    echo "Manager approved — exiting."
+    break
+  fi
+  if echo "$MSG" | grep -q '\[CONTINUE_WORK\]'; then
+    echo "Manager sent additional instructions:"
+    echo "$MSG"
+    break
+  fi
+  echo "Waiting for manager approval..."
+  sleep 10
+done
+`+"```"+`
+
+3. If the manager sends **[CONTINUE_WORK]** with additional instructions:
+   - Read the instructions from the message content
+   - Execute the requested fixes
+   - Broadcast [WORK_DONE] again with a summary of the new changes
+   - Return to the approval loop (step 2)
+
+4. If the manager sends **[WORKER_APPROVED]** — you can safely exit.
+
+**Do NOT exit before receiving WORKER_APPROVED.** The manager needs to review your work first.
+
+`, apiURL, taskID, subtaskID, apiURL, taskID, subtaskID)
 }
 
 // ReadDirective reads a directive file for a specific subtask written by the manager.

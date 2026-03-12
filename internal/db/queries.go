@@ -781,6 +781,32 @@ func (db *DB) ListAgentMessages(ctx context.Context, taskID string, limit int) (
 	return messages, rows.Err()
 }
 
+// ListAgentMessagesAfterID returns messages for a task with ID greater than afterID.
+func (db *DB) ListAgentMessagesAfterID(ctx context.Context, taskID string, afterID int64) ([]AgentMessage, error) {
+	query := `
+		SELECT id, task_id, from_agent_id, from_subtask_id, to_agent_id, to_subtask_id, msg_type, content, created_at
+		FROM agent_messages WHERE task_id = ? AND id > ? ORDER BY id
+	`
+	rows, err := db.QueryContext(ctx, query, taskID, afterID)
+	if err != nil {
+		return nil, fmt.Errorf("listing agent messages after ID %d for task %s: %w", afterID, taskID, err)
+	}
+	defer rows.Close()
+
+	var messages []AgentMessage
+	for rows.Next() {
+		var m AgentMessage
+		if err := rows.Scan(
+			&m.ID, &m.TaskID, &m.FromAgentID, &m.FromSubtaskID,
+			&m.ToAgentID, &m.ToSubtaskID, &m.MsgType, &m.Content, &m.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning agent message row: %w", err)
+		}
+		messages = append(messages, m)
+	}
+	return messages, rows.Err()
+}
+
 // ListPlannerQuestions returns questions for a task.
 func (db *DB) ListPlannerQuestions(ctx context.Context, taskID string) ([]PlannerQuestion, error) {
 	query := `
