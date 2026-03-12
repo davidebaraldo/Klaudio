@@ -10,6 +10,14 @@ import (
 	"github.com/klaudio-ai/klaudio/internal/db"
 )
 
+// workspaceFileRule is a standard instruction appended to all agent prompts
+// reminding them that only files inside the workspace are visible to the platform.
+const workspaceFileRule = `## Workspace Rule
+All files you create or modify MUST be inside the workspace directory (/home/agent/workspace).
+Files created outside the workspace are invisible to the platform and will NOT be shown to the user.
+This includes output files, generated code, test files, documentation — everything.
+`
+
 // PlanOutput is the raw JSON structure produced by the planner agent.
 type PlanOutput struct {
 	Analysis        string       `json:"analysis"`
@@ -233,6 +241,9 @@ func BuildSubtaskPrompt(subtask db.Subtask, allSubtasks []db.Subtask, taskPrompt
 		b.WriteString("\n")
 		b.WriteString(APICommsInstructions(o.APIURL, o.TaskID, subtask.ID))
 	}
+
+	b.WriteString("\n")
+	b.WriteString(workspaceFileRule)
 
 	return b.String()
 }
