@@ -285,6 +285,14 @@ func extractJSONBlock(data []byte) []byte {
 // extractFromStreamJSON tries to find a complete JSON object in Claude's
 // stream-json output format. The stream consists of JSON lines; we look for
 // text content that contains our JSON payload.
+//
+// Claude Code stream-json events come in several formats:
+//
+//	{"type":"system","subtype":"init",...}                                          → skip
+//	{"type":"assistant","message":{"content":[{"type":"text","text":"..."}],...}}   → extract text
+//	{"type":"content_block_delta","delta":{"type":"text_delta","text":"..."}}       → extract text
+//	{"type":"result","result":"...","subtype":"success"}                            → extract result
+//	Legacy: {"type":"...", "content":"...", "text":"..."}                           → extract content/text
 func extractFromStreamJSON(data []byte) []byte {
 	lines := bytes.Split(data, []byte("\n"))
 	var textParts []string
@@ -295,26 +303,72 @@ func extractFromStreamJSON(data []byte) []byte {
 			continue
 		}
 
-		// Try to parse as a stream-json event
-		var event struct {
-			Type    string `json:"type"`
-			Content string `json:"content"`
-			Text    string `json:"text"`
-			Result  string `json:"result"`
-		}
-		if err := json.Unmarshal(line, &event); err != nil {
+		// Parse into a generic map to handle nested structures
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(line, &raw); err != nil {
 			continue
 		}
 
-		// Collect text content from various stream event types
-		if event.Content != "" {
-			textParts = append(textParts, event.Content)
+		// Skip system/init events
+		var eventType string
+		if t, ok := raw["type"]; ok {
+			json.Unmarshal(t, &eventType)
 		}
-		if event.Text != "" {
-			textParts = append(textParts, event.Text)
+		if eventType == "system" {
+			continue
 		}
-		if event.Result != "" {
-			textParts = append(textParts, event.Result)
+
+		// Strategy 1: "result" field (top-level string — final result event)
+		if r, ok := raw["result"]; ok {
+			var result string
+			if json.Unmarshal(r, &result) == nil && result != "" {
+				textParts = append(textParts, result)
+				continue
+			}
+		}
+
+		// Strategy 2: nested message.content[].text (assistant message events)
+		if m, ok := raw["message"]; ok {
+			var msg struct {
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			}
+			if json.Unmarshal(m, &msg) == nil {
+				for _, block := range msg.Content {
+					if block.Type == "text" && block.Text != "" {
+						textParts = append(textParts, block.Text)
+					}
+				}
+				continue
+			}
+		}
+
+		// Strategy 3: delta.text (content_block_delta events)
+		if d, ok := raw["delta"]; ok {
+			var delta struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			}
+			if json.Unmarshal(d, &delta) == nil && delta.Text != "" {
+				textParts = append(textParts, delta.Text)
+				continue
+			}
+		}
+
+		// Strategy 4: legacy top-level content/text fields
+		if c, ok := raw["content"]; ok {
+			var content string
+			if json.Unmarshal(c, &content) == nil && content != "" {
+				textParts = append(textParts, content)
+			}
+		}
+		if t, ok := raw["text"]; ok {
+			var text string
+			if json.Unmarshal(t, &text) == nil && text != "" {
+				textParts = append(textParts, text)
+			}
 		}
 	}
 
