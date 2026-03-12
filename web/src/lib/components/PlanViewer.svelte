@@ -1,6 +1,7 @@
 <script lang="ts">
 	import StatusBadge from './StatusBadge.svelte';
 	import TruncatedText from './TruncatedText.svelte';
+	import DependencyGraph from './DependencyGraph.svelte';
 	import type { Plan, Subtask } from '$lib/api';
 	import { updatePlan, approveTask } from '$lib/api';
 
@@ -103,6 +104,14 @@
 				{/if}
 			</div>
 		</div>
+
+		<!-- Dependency Graph -->
+		{#if plan.subtasks.length > 1 && plan.subtasks.some(s => s.depends_on?.length)}
+			<div class="p-4 bg-zinc-800/30 rounded border border-zinc-700">
+				<h3 class="text-sm font-medium text-zinc-400 mb-3">Dependency Graph</h3>
+				<DependencyGraph subtasks={plan.subtasks} />
+			</div>
+		{/if}
 
 		<div class="space-y-3">
 			{#each editMode ? editedSubtasks : plan.subtasks as subtask, i}

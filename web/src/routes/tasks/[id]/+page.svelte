@@ -19,9 +19,9 @@
 	import TruncatedText from '$lib/components/TruncatedText.svelte';
 	import PlanViewer from '$lib/components/PlanViewer.svelte';
 	import FileManager from '$lib/components/FileManager.svelte';
-	import MessageInput from '$lib/components/MessageInput.svelte';
 	import QuestionPanel from '$lib/components/QuestionPanel.svelte';
 	import AgentComms from '$lib/components/AgentComms.svelte';
+	import AgentGrid from '$lib/components/AgentGrid.svelte';
 
 	const { data } = $props();
 
@@ -354,32 +354,12 @@
 				<PlanViewer {plan} taskId={data.taskId} taskStatus={task.status} onrefresh={() => { refresh(); loadPlan(); }} />
 			{:else if activeTab === 'agents'}
 				{#if hasAgents}
-					<div class="space-y-4">
-						{#each task.agents ?? [] as agent}
-							<div class="border border-zinc-700 rounded-lg overflow-hidden">
-								<div class="flex items-center justify-between p-3 bg-zinc-800/50">
-									<div class="flex items-center gap-3">
-										<span class="text-sm font-medium text-zinc-200">{agent.role}</span>
-										<StatusBadge status={agent.status} />
-										<span class="text-xs text-zinc-500 font-mono">{agent.subtask_id}</span>
-									</div>
-									<span class="text-xs text-zinc-500 font-mono">{agent.id}</span>
-								</div>
-								<div class="h-[300px]">
-									{#if TerminalComponent}
-										<TerminalComponent taskId={data.taskId} agentId={agent.id} />
-									{:else}
-										<div class="flex items-center justify-center h-full text-zinc-500 text-sm">Loading terminal...</div>
-									{/if}
-								</div>
-								<MessageInput
-									agentId={agent.id}
-									disabled={agent.status !== 'running'}
-									onsend={handleSendMessage}
-								/>
-							</div>
-						{/each}
-					</div>
+					<AgentGrid
+						agents={task.agents ?? []}
+						taskId={data.taskId}
+						{TerminalComponent}
+						onsend={handleSendMessage}
+					/>
 				{:else}
 					<div class="p-8 text-center text-zinc-500 text-sm">
 						{#if task?.status === 'planning'}
