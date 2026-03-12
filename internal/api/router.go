@@ -121,6 +121,10 @@ func NewRouter(cfg *config.Config, svc *Services) chi.Router {
 			r.Get("/{templateID}", h.GetRepoTemplate)
 			r.Put("/{templateID}", h.UpdateRepoTemplate)
 			r.Delete("/{templateID}", h.DeleteRepoTemplate)
+
+			// Repo memory
+			r.Get("/{templateID}/memory", h.GetRepoMemory)
+			r.Delete("/{templateID}/memory", h.DeleteRepoMemory)
 		})
 
 		// Config endpoints

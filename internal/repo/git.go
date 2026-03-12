@@ -29,6 +29,15 @@ func getCurrentBranch(repo *git.Repository) (string, error) {
 	return head.Name().Short(), nil
 }
 
+// GetLastCommitHash returns the hash of the latest commit on HEAD for the repo at dir.
+func GetLastCommitHash(dir string) (string, error) {
+	r, err := openRepo(dir)
+	if err != nil {
+		return "", err
+	}
+	return getLastCommitHash(r)
+}
+
 // getLastCommitHash returns the hash of the latest commit on HEAD.
 func getLastCommitHash(repo *git.Repository) (string, error) {
 	head, err := repo.Head()

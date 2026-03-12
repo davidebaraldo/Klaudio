@@ -118,13 +118,15 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 		}
 
 		rc := db.RepoConfig{
-			URL:        tmpl.URL,
-			Branch:     tmpl.DefaultBranch,
-			AutoBranch: tmpl.AutoBranch,
-			AutoCommit: tmpl.AutoCommit,
-			AutoPush:   tmpl.AutoPush,
-			AutoPR:     tmpl.AutoPR,
-			PRTarget:   tmpl.PRTarget,
+			URL:            tmpl.URL,
+			Branch:         tmpl.DefaultBranch,
+			AutoBranch:     tmpl.AutoBranch,
+			AutoCommit:     tmpl.AutoCommit,
+			AutoPush:       tmpl.AutoPush,
+			AutoPR:         tmpl.AutoPR,
+			PRTarget:       tmpl.PRTarget,
+			RepoTemplateID: tmpl.ID,
+			EnableMemory:   tmpl.EnableMemory,
 		}
 		if tmpl.AccessToken != nil {
 			rc.AccessToken = *tmpl.AccessToken

@@ -50,7 +50,8 @@ All with real-time streaming, a modern web UI, and full stop/resume capability.
 | **Streaming** | Real-time visibility | Watch agent output live via WebSocket + xterm.js terminal, with backfill for late joiners |
 | **Teams** | Multi-agent orchestration | Agents communicate through filesystem directives, database messages, and lifecycle signals |
 | **State** | Stop & resume | Pause any task, save full state (files, Claude memory, conversation context), resume in a fresh container |
-| **Git** | End-to-end integration | Clone repos, auto-commit, auto-push, and auto-create PRs on Bitbucket |
+| **Git** | End-to-end integration | Clone repos, auto-commit, auto-push, and auto-create PRs on GitHub/Bitbucket |
+| **Memory** | Repo memory | Optional per-template codebase analysis cached by commit — agents start with full context instead of re-analyzing from scratch |
 | **UI** | Modern web interface | Dashboard, task detail (Plan, Agents, Comms, Files tabs), file viewer/editor, team templates |
 | **Deploy** | Single binary | Frontend and Docker build context embedded in the Go binary — just download and run |
 
@@ -318,6 +319,8 @@ storage:
 |--------|----------|-------------|
 | `GET/POST` | `/api/team-templates` | Team template CRUD |
 | `GET/POST` | `/api/repo-templates` | Repository template CRUD |
+| `GET` | `/api/repo-templates/:id/memory` | Get cached repo analysis |
+| `DELETE` | `/api/repo-templates/:id/memory` | Clear cached repo analysis |
 
 <details>
 <summary><strong>Example: Create and start a task</strong></summary>
@@ -353,7 +356,7 @@ klaudio/
 │   ├── docker/               # Docker container management
 │   ├── embedded/             # Embedded frontend + Docker context
 │   ├── files/                # File upload/download/transfer
-│   ├── repo/                 # Git operations, Bitbucket API
+│   ├── repo/                 # Git operations, repo analysis, platform APIs
 │   ├── state/                # Checkpoint persistence, autosave
 │   ├── stream/               # Real-time streaming hub
 │   └── task/                 # Core orchestration engine
@@ -364,7 +367,7 @@ klaudio/
 │       ├── comms.go              # Inter-agent messaging
 │       └── ...
 ├── docker/                   # Agent Dockerfile and entrypoint
-├── migrations/               # SQL migrations (001–005)
+├── migrations/               # SQL migrations (001–006)
 ├── web/                      # SvelteKit frontend
 │   └── src/
 │       ├── routes/               # Pages

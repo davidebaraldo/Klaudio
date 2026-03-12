@@ -688,7 +688,105 @@ func (tm *TaskManager) prepareWorkspace(ctx context.Context, task *db.Task) (str
 		"branch": branchName,
 	})
 
+	// Generate repo memory if enabled
+	if rc.EnableMemory && rc.RepoTemplateID != "" {
+		tm.ensureRepoMemory(ctx, task.ID, rc.RepoTemplateID, branchName, workspaceDir)
+	}
+
 	return workspaceDir, nil
+}
+
+// ensureRepoMemory checks if an up-to-date repo memory exists for the current
+// commit and generates one if not. This is a non-blocking best-effort operation.
+func (tm *TaskManager) ensureRepoMemory(ctx context.Context, taskID, templateID, branch, workspaceDir string) {
+	logger := slog.With("task_id", taskID, "template_id", templateID, "component", "repo_memory")
+
+	commitHash, err := repo.GetLastCommitHash(workspaceDir)
+	if err != nil {
+		logger.Warn("failed to get commit hash for repo memory", "error", err)
+		return
+	}
+
+	// Check if memory already exists for this commit
+	existing, err := tm.db.GetRepoMemoryByCommit(ctx, templateID, branch, commitHash)
+	if err != nil {
+		logger.Warn("failed to check existing repo memory", "error", err)
+		return
+	}
+	if existing != nil {
+		logger.Info("repo memory is up-to-date", "commit", commitHash[:8])
+		return
+	}
+
+	// Generate new analysis
+	logger.Info("generating repo memory", "commit", commitHash[:8])
+	analysis, err := repo.Analyze(workspaceDir)
+	if err != nil {
+		logger.Warn("failed to analyze repository", "error", err)
+		return
+	}
+
+	// Marshal JSON fields
+	fileTreeJSON, _ := json.Marshal(analysis.FileTree)
+	langsJSON, _ := json.Marshal(analysis.Languages)
+	fwJSON, _ := json.Marshal(analysis.Frameworks)
+	keyFilesJSON, _ := json.Marshal(analysis.KeyFiles)
+	depsJSON, _ := json.Marshal(analysis.Dependencies)
+
+	ftStr := string(fileTreeJSON)
+	lStr := string(langsJSON)
+	fwStr := string(fwJSON)
+	kfStr := string(keyFilesJSON)
+	dStr := string(depsJSON)
+
+	memory := &db.RepoMemory{
+		ID:             uuid.New().String(),
+		RepoTemplateID: templateID,
+		Branch:         branch,
+		CommitHash:     commitHash,
+		Content:        analysis.Content,
+		FileTree:       &ftStr,
+		Languages:      &lStr,
+		Frameworks:     &fwStr,
+		KeyFiles:       &kfStr,
+		Dependencies:   &dStr,
+		CreatedAt:      time.Now().UTC(),
+	}
+
+	if err := tm.db.CreateRepoMemory(ctx, memory); err != nil {
+		logger.Warn("failed to save repo memory", "error", err)
+		return
+	}
+
+	logger.Info("repo memory generated and saved", "commit", commitHash[:8])
+	tm.recordEvent(ctx, taskID, "repo.memory_generated", map[string]interface{}{
+		"template_id": templateID,
+		"branch":      branch,
+		"commit":      commitHash[:8],
+	})
+}
+
+// getRepoMemoryContent retrieves the repo memory content for a task's repo config, if available.
+func (tm *TaskManager) getRepoMemoryContent(ctx context.Context, task *db.Task) string {
+	if task.RepoConfig == nil || *task.RepoConfig == "" {
+		return ""
+	}
+
+	var rc db.RepoConfig
+	if err := json.Unmarshal([]byte(*task.RepoConfig), &rc); err != nil {
+		return ""
+	}
+
+	if !rc.EnableMemory || rc.RepoTemplateID == "" {
+		return ""
+	}
+
+	memory, err := tm.db.GetRepoMemory(ctx, rc.RepoTemplateID, rc.Branch)
+	if err != nil || memory == nil {
+		return ""
+	}
+
+	return memory.Content
 }
 
 // copyInputFilesToWorkspace copies uploaded input files into the workspace
@@ -907,6 +1005,7 @@ func (tm *TaskManager) runExecutor(taskID string) {
 			Subtasks:   subtasks,
 			TaskPrompt: task.Prompt,
 			Mode:       teamMode,
+			RepoMemory: tm.getRepoMemoryContent(ctx, task),
 		}
 
 		orchErr := tm.orchestrator.Run(ctx, task, execPlan)
@@ -935,7 +1034,8 @@ func (tm *TaskManager) runExecutor(taskID string) {
 		return
 	}
 
-	// Sequential execution
+	// Sequential execution — inject repo memory if available
+	tm.executor.repoMemory = tm.getRepoMemoryContent(ctx, task)
 	result := tm.executor.Execute(ctx, task, plan)
 
 	if ctx.Err() != nil {

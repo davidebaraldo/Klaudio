@@ -293,8 +293,23 @@ export interface RepoTemplate {
 	auto_pr: boolean;
 	pr_target: string;
 	pr_reviewers?: string[];
+	enable_memory: boolean;
 	created_at?: string;
 	updated_at?: string;
+}
+
+export interface RepoMemory {
+	id: string;
+	repo_template_id: string;
+	branch: string;
+	commit_hash: string;
+	content: string;
+	file_tree?: string;
+	languages?: string;
+	frameworks?: string;
+	key_files?: string;
+	dependencies?: string;
+	created_at: string;
 }
 
 export interface CreateRepoTemplateRequest {
@@ -308,6 +323,7 @@ export interface CreateRepoTemplateRequest {
 	auto_pr?: boolean;
 	pr_target?: string;
 	pr_reviewers?: string[];
+	enable_memory?: boolean;
 }
 
 export function getRepoTemplates() {
@@ -320,6 +336,15 @@ export function createRepoTemplate(data: CreateRepoTemplateRequest) {
 
 export function deleteRepoTemplate(id: string) {
 	return request<void>(`/repo-templates/${id}`, { method: 'DELETE' });
+}
+
+export function getRepoMemory(templateId: string, branch?: string) {
+	const params = branch ? `?branch=${encodeURIComponent(branch)}` : '';
+	return request<{ memory: RepoMemory | null }>(`/repo-templates/${templateId}/memory${params}`);
+}
+
+export function deleteRepoMemory(templateId: string) {
+	return request<void>(`/repo-templates/${templateId}/memory`, { method: 'DELETE' });
 }
 
 // ---- Team Templates ----

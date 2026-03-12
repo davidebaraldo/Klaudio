@@ -135,6 +135,16 @@ func (p *Planner) Run(ctx context.Context, task *db.Task, additionalContext stri
 			prompt += fmt.Sprintf("The workspace contains a cloned Git repository from: %s\n", rc.URL)
 			prompt += fmt.Sprintf("Working branch: klaudio/%s\n", task.ID[:8])
 			prompt += "The repository code is available in /home/agent/workspace. Analyze the existing code structure when planning.\n"
+
+			// Inject cached repo memory if available
+			if rc.EnableMemory && rc.RepoTemplateID != "" {
+				memory, memErr := p.db.GetRepoMemory(ctx, rc.RepoTemplateID, rc.Branch)
+				if memErr == nil && memory != nil {
+					prompt += "\n## Cached Repository Analysis (commit " + memory.CommitHash[:8] + ")\n"
+					prompt += "The following analysis was generated automatically. Use it to speed up your understanding of the codebase.\n\n"
+					prompt += memory.Content
+				}
+			}
 		}
 	}
 

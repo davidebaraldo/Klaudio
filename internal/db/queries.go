@@ -502,13 +502,13 @@ func (db *DB) UpdateTaskHasState(ctx context.Context, id string, hasState bool) 
 // CreateRepoTemplate inserts a new repo template.
 func (db *DB) CreateRepoTemplate(ctx context.Context, rt *RepoTemplate) error {
 	query := `
-		INSERT INTO repo_templates (id, name, url, default_branch, access_token, auto_branch, auto_commit, auto_push, auto_pr, pr_target, pr_reviewers, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO repo_templates (id, name, url, default_branch, access_token, auto_branch, auto_commit, auto_push, auto_pr, pr_target, pr_reviewers, enable_memory, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := db.ExecContext(ctx, query,
 		rt.ID, rt.Name, rt.URL, rt.DefaultBranch, rt.AccessToken,
 		rt.AutoBranch, rt.AutoCommit, rt.AutoPush, rt.AutoPR, rt.PRTarget, rt.PRReviewers,
-		rt.CreatedAt, rt.UpdatedAt,
+		rt.EnableMemory, rt.CreatedAt, rt.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting repo template: %w", err)
@@ -519,7 +519,7 @@ func (db *DB) CreateRepoTemplate(ctx context.Context, rt *RepoTemplate) error {
 // ListRepoTemplates returns all repo templates.
 func (db *DB) ListRepoTemplates(ctx context.Context) ([]RepoTemplate, error) {
 	query := `
-		SELECT id, name, url, default_branch, access_token, auto_branch, auto_commit, auto_push, auto_pr, pr_target, pr_reviewers, created_at, updated_at
+		SELECT id, name, url, default_branch, access_token, auto_branch, auto_commit, auto_push, auto_pr, pr_target, pr_reviewers, enable_memory, created_at, updated_at
 		FROM repo_templates ORDER BY name
 	`
 	rows, err := db.QueryContext(ctx, query)
@@ -534,7 +534,7 @@ func (db *DB) ListRepoTemplates(ctx context.Context) ([]RepoTemplate, error) {
 		if err := rows.Scan(
 			&rt.ID, &rt.Name, &rt.URL, &rt.DefaultBranch, &rt.AccessToken,
 			&rt.AutoBranch, &rt.AutoCommit, &rt.AutoPush, &rt.AutoPR, &rt.PRTarget, &rt.PRReviewers,
-			&rt.CreatedAt, &rt.UpdatedAt,
+			&rt.EnableMemory, &rt.CreatedAt, &rt.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning repo template row: %w", err)
 		}
@@ -546,14 +546,14 @@ func (db *DB) ListRepoTemplates(ctx context.Context) ([]RepoTemplate, error) {
 // GetRepoTemplate retrieves a repo template by ID.
 func (db *DB) GetRepoTemplate(ctx context.Context, id string) (*RepoTemplate, error) {
 	query := `
-		SELECT id, name, url, default_branch, access_token, auto_branch, auto_commit, auto_push, auto_pr, pr_target, pr_reviewers, created_at, updated_at
+		SELECT id, name, url, default_branch, access_token, auto_branch, auto_commit, auto_push, auto_pr, pr_target, pr_reviewers, enable_memory, created_at, updated_at
 		FROM repo_templates WHERE id = ?
 	`
 	rt := &RepoTemplate{}
 	err := db.QueryRowContext(ctx, query, id).Scan(
 		&rt.ID, &rt.Name, &rt.URL, &rt.DefaultBranch, &rt.AccessToken,
 		&rt.AutoBranch, &rt.AutoCommit, &rt.AutoPush, &rt.AutoPR, &rt.PRTarget, &rt.PRReviewers,
-		&rt.CreatedAt, &rt.UpdatedAt,
+		&rt.EnableMemory, &rt.CreatedAt, &rt.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -571,13 +571,13 @@ func (db *DB) UpdateRepoTemplate(ctx context.Context, rt *RepoTemplate) error {
 		UPDATE repo_templates
 		SET name = ?, url = ?, default_branch = ?, access_token = ?,
 		    auto_branch = ?, auto_commit = ?, auto_push = ?, auto_pr = ?, pr_target = ?, pr_reviewers = ?,
-		    updated_at = ?
+		    enable_memory = ?, updated_at = ?
 		WHERE id = ?
 	`
 	result, err := db.ExecContext(ctx, query,
 		rt.Name, rt.URL, rt.DefaultBranch, rt.AccessToken,
 		rt.AutoBranch, rt.AutoCommit, rt.AutoPush, rt.AutoPR, rt.PRTarget, rt.PRReviewers,
-		now, rt.ID,
+		rt.EnableMemory, now, rt.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating repo template %s: %w", rt.ID, err)
@@ -805,6 +805,77 @@ func (db *DB) ListAgentMessagesAfterID(ctx context.Context, taskID string, after
 		messages = append(messages, m)
 	}
 	return messages, rows.Err()
+}
+
+// ---- Repo Memory ----
+
+// CreateRepoMemory inserts a new repo memory record.
+func (db *DB) CreateRepoMemory(ctx context.Context, rm *RepoMemory) error {
+	query := `
+		INSERT INTO repo_memories (id, repo_template_id, branch, commit_hash, content, file_tree, languages, frameworks, key_files, dependencies, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := db.ExecContext(ctx, query,
+		rm.ID, rm.RepoTemplateID, rm.Branch, rm.CommitHash, rm.Content,
+		rm.FileTree, rm.Languages, rm.Frameworks, rm.KeyFiles, rm.Dependencies,
+		rm.CreatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("inserting repo memory: %w", err)
+	}
+	return nil
+}
+
+// GetRepoMemory retrieves the latest repo memory for a template and branch.
+func (db *DB) GetRepoMemory(ctx context.Context, templateID, branch string) (*RepoMemory, error) {
+	query := `
+		SELECT id, repo_template_id, branch, commit_hash, content, file_tree, languages, frameworks, key_files, dependencies, created_at
+		FROM repo_memories WHERE repo_template_id = ? AND branch = ?
+		ORDER BY created_at DESC LIMIT 1
+	`
+	rm := &RepoMemory{}
+	err := db.QueryRowContext(ctx, query, templateID, branch).Scan(
+		&rm.ID, &rm.RepoTemplateID, &rm.Branch, &rm.CommitHash, &rm.Content,
+		&rm.FileTree, &rm.Languages, &rm.Frameworks, &rm.KeyFiles, &rm.Dependencies,
+		&rm.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying repo memory for template %s branch %s: %w", templateID, branch, err)
+	}
+	return rm, nil
+}
+
+// GetRepoMemoryByCommit retrieves a repo memory for a specific template, branch, and commit.
+func (db *DB) GetRepoMemoryByCommit(ctx context.Context, templateID, branch, commitHash string) (*RepoMemory, error) {
+	query := `
+		SELECT id, repo_template_id, branch, commit_hash, content, file_tree, languages, frameworks, key_files, dependencies, created_at
+		FROM repo_memories WHERE repo_template_id = ? AND branch = ? AND commit_hash = ?
+	`
+	rm := &RepoMemory{}
+	err := db.QueryRowContext(ctx, query, templateID, branch, commitHash).Scan(
+		&rm.ID, &rm.RepoTemplateID, &rm.Branch, &rm.CommitHash, &rm.Content,
+		&rm.FileTree, &rm.Languages, &rm.Frameworks, &rm.KeyFiles, &rm.Dependencies,
+		&rm.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying repo memory by commit: %w", err)
+	}
+	return rm, nil
+}
+
+// DeleteRepoMemoriesByTemplate removes all repo memories for a template.
+func (db *DB) DeleteRepoMemoriesByTemplate(ctx context.Context, templateID string) error {
+	_, err := db.ExecContext(ctx, "DELETE FROM repo_memories WHERE repo_template_id = ?", templateID)
+	if err != nil {
+		return fmt.Errorf("deleting repo memories for template %s: %w", templateID, err)
+	}
+	return nil
 }
 
 // ListPlannerQuestions returns questions for a task.

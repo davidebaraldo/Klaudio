@@ -127,6 +127,11 @@ Tasks operate on Git repositories with auto-commit, push, and PR creation.
 | 4.9 | UI: repo config form with per-task overrides | ✅ |
 | 4.10 | UI: PR link display | ✅ |
 | 4.11 | CLAUDE.md injection into agent containers | ✅ |
+| 4.12 | Repo memory — cached codebase analysis per template/branch/commit | ✅ |
+| 4.13 | Static analyzer — languages, frameworks, dependencies, file tree | ✅ |
+| 4.14 | Repo memory injection into planner and agent prompts | ✅ |
+| 4.15 | Repo memory API — GET/DELETE per template | ✅ |
+| 4.16 | UI: enable_memory toggle on repo templates | ✅ |
 
 ---
 
