@@ -170,9 +170,9 @@ Multiple agents work in parallel, coordinated by dependency graph.
 | 6.6 | Reviewer agent — optional QA verification | ✅ |
 | 6.7 | Conflict resolution — detect and resolve file conflicts | ✅ |
 | 6.8 | Concurrency limits — global and per-task | ✅ |
-| 6.9 | UI: agent grid view | ⬜ |
-| 6.10 | UI: dependency graph visualization | ⬜ |
-| 6.11 | UI: per-agent message injection | ⬜ |
+| 6.9 | UI: agent grid view | ✅ |
+| 6.10 | UI: dependency graph visualization | ✅ |
+| 6.11 | UI: per-agent message injection | ✅ |
 | 6.12 | Team templates — predefined configurations | ✅ |
 | 6.13 | File-level locking | ✅ |
 
