@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { createStatsStream } from '$lib/stores/websocket';
-	import type { TaskStats, AgentStats } from '$lib/api';
+	import { getTaskStats, type TaskStats, type AgentStats } from '$lib/api';
 
 	let { taskId }: { taskId: string } = $props();
 
@@ -58,6 +58,11 @@
 	}
 
 	onMount(() => {
+		// Fetch initial stats immediately so data appears without waiting for WS tick
+		getTaskStats(taskId).then((v) => {
+			if (!statsData) statsData = v;
+		}).catch(() => {});
+
 		stream = createStatsStream(taskId, '2s');
 		stream.stats.subscribe((v) => { statsData = v; });
 		stream.connected.subscribe((v) => { streamConnected = v; });
