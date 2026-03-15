@@ -25,6 +25,7 @@ type Services struct {
 	Docker      *docker.Manager
 	Config      *config.Config
 	StreamHub   *stream.Hub
+	MessageBus  *stream.MessageBus
 	TaskManager *task.TaskManager
 	FileManager *files.Manager
 	Pool        *agent.Pool
@@ -46,6 +47,7 @@ func NewRouter(cfg *config.Config, svc *Services) chi.Router {
 	// needed for WebSocket upgrade.
 	r.Route("/ws", func(ws chi.Router) {
 		ws.Get("/tasks/{taskID}/stream", h.HandleTaskStream)
+		ws.Get("/tasks/{taskID}/messages", h.HandleMessageStream)
 	})
 
 	r.Route("/api", func(r chi.Router) {

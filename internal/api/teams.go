@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/klaudio-ai/klaudio/internal/db"
+	"github.com/klaudio-ai/klaudio/internal/stream"
 )
 
 // TeamTemplateRequest is the JSON body for creating or updating a team template.
@@ -151,6 +153,9 @@ func (h *Handlers) DeleteTeamTemplate(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListAgentMessages handles GET /api/tasks/{taskID}/messages.
+// Supports optional query parameters:
+//   - after_id: only return messages with ID > after_id (cursor-based pagination)
+//   - limit: max number of messages to return (default 200)
 func (h *Handlers) ListAgentMessages(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "taskID")
 	if taskID == "" {
@@ -158,7 +163,36 @@ func (h *Handlers) ListAgentMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages, err := h.svc.DB.ListAgentMessages(r.Context(), taskID, 200)
+	// Check for cursor-based pagination via after_id
+	if afterIDStr := r.URL.Query().Get("after_id"); afterIDStr != "" {
+		afterID, err := strconv.ParseInt(afterIDStr, 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid after_id: must be an integer")
+			return
+		}
+
+		messages, err := h.svc.DB.ListAgentMessagesAfterID(r.Context(), taskID, afterID)
+		if err != nil {
+			slog.Error("failed to list agent messages after cursor", "task_id", taskID, "after_id", afterID, "error", err)
+			writeError(w, http.StatusInternalServerError, "failed to list agent messages")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"messages": messages,
+		})
+		return
+	}
+
+	// Default: return latest messages with limit
+	limit := 200
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	messages, err := h.svc.DB.ListAgentMessages(r.Context(), taskID, limit)
 	if err != nil {
 		slog.Error("failed to list agent messages", "task_id", taskID, "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to list agent messages")
@@ -216,6 +250,21 @@ func (h *Handlers) SendAgentMessage(w http.ResponseWriter, r *http.Request) {
 		slog.Error("failed to create agent message", "task_id", taskID, "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to send message")
 		return
+	}
+
+	// Publish to real-time message bus for WebSocket subscribers and orchestrator
+	if h.svc.MessageBus != nil {
+		h.svc.MessageBus.Publish(taskID, stream.AgentMessageEvent{
+			ID:            msg.ID,
+			TaskID:        msg.TaskID,
+			FromAgentID:   msg.FromAgentID,
+			FromSubtaskID: msg.FromSubtaskID,
+			ToAgentID:     msg.ToAgentID,
+			ToSubtaskID:   msg.ToSubtaskID,
+			MsgType:       msg.MsgType,
+			Content:       msg.Content,
+			CreatedAt:     msg.CreatedAt.Format(time.RFC3339),
+		})
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]interface{}{

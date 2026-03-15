@@ -12,6 +12,7 @@ import (
 
 	"github.com/klaudio-ai/klaudio/internal/agent"
 	"github.com/klaudio-ai/klaudio/internal/db"
+	"github.com/klaudio-ai/klaudio/internal/stream"
 )
 
 // RunCollaborative executes the plan in collaborative mode:
@@ -403,15 +404,28 @@ func waitForDirectives(ctx context.Context, absWorkspace string, subtasks []db.S
 // sendSystemMessage sends a system/orchestrator message to a task via the comms DB.
 func (o *Orchestrator) sendSystemMessage(ctx context.Context, taskID, signal, content string) {
 	from := "orchestrator"
+	now := time.Now().UTC()
 	msg := &db.AgentMessage{
 		TaskID:        taskID,
 		FromSubtaskID: &from,
 		MsgType:       "system",
 		Content:       fmt.Sprintf("[%s] %s", signal, content),
-		CreatedAt:     time.Now().UTC(),
+		CreatedAt:     now,
 	}
 	if err := o.db.CreateAgentMessage(ctx, msg); err != nil {
 		slog.Warn("failed to send system message", "task_id", taskID, "signal", signal, "error", err)
+	}
+
+	// Publish to message bus for real-time delivery
+	if o.msgBus != nil {
+		o.msgBus.Publish(taskID, stream.AgentMessageEvent{
+			ID:            msg.ID,
+			TaskID:        taskID,
+			FromSubtaskID: &from,
+			MsgType:       "system",
+			Content:       msg.Content,
+			CreatedAt:     now.Format(time.RFC3339),
+		})
 	}
 }
 
@@ -441,7 +455,7 @@ func (o *Orchestrator) handleCollaborativeCompletion(
 	delete(running, ev.AgentID)
 	runningMu.Unlock()
 
-	// Manager completion — just log it
+	// Manager completion — notify workers so they don't hang in approval loops
 	if ev.SubtaskID == "manager" {
 		if ev.Result.ExitCode == 0 && ev.Result.Error == nil {
 			logger.Info("team manager exited successfully")
@@ -449,6 +463,9 @@ func (o *Orchestrator) handleCollaborativeCompletion(
 			logger.Warn("team manager exited with error",
 				"exit_code", ev.Result.ExitCode, "error", ev.Result.Error)
 		}
+		// Send MANAGER_EXITED signal so workers in approval loops can detect it and exit
+		o.sendSystemMessage(ctx, taskID, "MANAGER_EXITED",
+			fmt.Sprintf("Manager has exited (exit_code=%d). Workers should finish without waiting for approval.", ev.Result.ExitCode))
 		return
 	}
 
@@ -537,6 +554,12 @@ func (o *Orchestrator) waitForManagerDecision(
 	msgCursor *int64,
 	logger *slog.Logger,
 ) []RespawnRequest {
+	// If MessageBus is available, use real-time subscription instead of polling.
+	if o.msgBus != nil {
+		return o.waitForManagerDecisionRT(ctx, taskID, completionCh, runningMu, running, logger)
+	}
+
+	// Fallback: poll the DB periodically.
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -546,7 +569,6 @@ func (o *Orchestrator) waitForManagerDecision(
 			return nil
 
 		case ev := <-completionCh:
-			// An agent exited — if it's the manager, we're done
 			runningMu.Lock()
 			delete(running, ev.AgentID)
 			runningMu.Unlock()
@@ -562,11 +584,63 @@ func (o *Orchestrator) waitForManagerDecision(
 			}
 
 		case <-ticker.C:
-			// Poll for RESPAWN_WORKERS message from manager
 			reqs, newCursor := o.comms.CheckRespawnRequests(ctx, taskID, *msgCursor)
 			*msgCursor = newCursor
 			if len(reqs) > 0 {
 				logger.Info("manager sent RESPAWN_WORKERS", "count", len(reqs))
+				return reqs
+			}
+		}
+	}
+}
+
+// waitForManagerDecisionRT uses the MessageBus for real-time notification
+// instead of polling the database.
+func (o *Orchestrator) waitForManagerDecisionRT(
+	ctx context.Context,
+	taskID string,
+	completionCh chan completionEvent,
+	runningMu *sync.Mutex,
+	running map[string]string,
+	logger *slog.Logger,
+) []RespawnRequest {
+	ch := o.msgBus.Subscribe(taskID)
+	defer o.msgBus.Unsubscribe(taskID, ch)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+
+		case ev := <-completionCh:
+			runningMu.Lock()
+			delete(running, ev.AgentID)
+			runningMu.Unlock()
+
+			if ev.SubtaskID == "manager" {
+				if ev.Result.ExitCode == 0 && ev.Result.Error == nil {
+					logger.Info("team manager exited — no more fix rounds requested")
+				} else {
+					logger.Warn("team manager exited with error",
+						"exit_code", ev.Result.ExitCode, "error", ev.Result.Error)
+				}
+				return nil
+			}
+
+		case msg := <-ch:
+			// Only look at messages from the manager
+			if msg.FromSubtaskID == nil || *msg.FromSubtaskID != "manager" {
+				continue
+			}
+			if msg.MsgType != "message" {
+				continue
+			}
+			if !strings.Contains(msg.Content, "[RESPAWN_WORKERS]") {
+				continue
+			}
+			reqs := parseRespawnContent(msg.Content)
+			if len(reqs) > 0 {
+				logger.Info("manager sent RESPAWN_WORKERS (real-time)", "count", len(reqs))
 				return reqs
 			}
 		}
@@ -703,6 +777,15 @@ func BuildManagerPrompt(subtasks []db.Subtask, taskPrompt string, roleHints map[
 	b.WriteString("   - If fixes are needed → send a **RESPAWN_WORKERS** message (see below) to relaunch specific workers\n\n")
 
 	b.WriteString("## How to Write Directives\n\n")
+	b.WriteString("**IMPORTANT**: Use atomic writes to avoid workers reading partial files.\n")
+	b.WriteString("Write to a `.tmp` file first, then move it to the final path:\n\n")
+	b.WriteString("```bash\n")
+	b.WriteString("# Example for a worker directive:\n")
+	b.WriteString("cat > .klaudio/directives/worker-1.md.tmp << 'DIRECTIVE'\n")
+	b.WriteString("... directive content ...\n")
+	b.WriteString("DIRECTIVE\n")
+	b.WriteString("mv .klaudio/directives/worker-1.md.tmp .klaudio/directives/worker-1.md\n")
+	b.WriteString("```\n\n")
 	b.WriteString("For EACH worker, create a file at `.klaudio/directives/{subtask_id}.md` with:\n")
 	b.WriteString("- What this worker should do first\n")
 	b.WriteString("- Shared contracts and interfaces to follow\n")
@@ -710,7 +793,7 @@ func BuildManagerPrompt(subtasks []db.Subtask, taskPrompt string, roleHints map[
 	b.WriteString("- How to handle dependencies on other workers' output\n")
 	b.WriteString("- Any specific instructions or constraints\n\n")
 
-	b.WriteString("Also create `.klaudio/directives/coordination.md` with:\n")
+	b.WriteString("Also create `.klaudio/directives/coordination.md` (using the same atomic write pattern) with:\n")
 	b.WriteString("- Shared API contracts\n")
 	b.WriteString("- Naming conventions\n")
 	b.WriteString("- File ownership (which worker owns which files)\n")
@@ -762,10 +845,17 @@ func BuildManagerPrompt(subtasks []db.Subtask, taskPrompt string, roleHints map[
 	b.WriteString("- You may request as many fix rounds as needed — there is no limit.\n\n")
 
 	b.WriteString("## Monitoring Loop\n\n")
-	b.WriteString("After writing directives, use this loop to monitor workers:\n")
+	b.WriteString("After writing directives, use cursor-based polling to efficiently monitor workers.\n")
+	b.WriteString("Track the highest message `id` you've seen and pass it as `after_id` to only get NEW messages:\n")
 	b.WriteString("```bash\n")
-	b.WriteString("# Poll for new messages (repeat every 10-15 seconds)\n")
-	b.WriteString(fmt.Sprintf("curl -s %s/api/tasks/%s/messages | jq '.messages[] | select(.msg_type==\"message\" or .msg_type==\"system\")'\n", apiURL, taskID))
+	b.WriteString("LAST_ID=0\n")
+	b.WriteString("while true; do\n")
+	b.WriteString(fmt.Sprintf("  RESP=$(curl -s '%s/api/tasks/%s/messages?after_id='$LAST_ID)\n", apiURL, taskID))
+	b.WriteString("  echo \"$RESP\" | jq '.messages[] | select(.msg_type==\"message\" or .msg_type==\"system\")'\n")
+	b.WriteString("  NEW_MAX=$(echo \"$RESP\" | jq '[.messages[].id] | max // 0')\n")
+	b.WriteString("  if [ \"$NEW_MAX\" != \"null\" ] && [ \"$NEW_MAX\" -gt \"$LAST_ID\" ] 2>/dev/null; then LAST_ID=$NEW_MAX; fi\n")
+	b.WriteString("  sleep 10\n")
+	b.WriteString("done\n")
 	b.WriteString("```\n\n")
 	b.WriteString("When you see `[ALL_WORKERS_DONE]`, review the code and decide: exit if satisfied, or send RESPAWN_WORKERS.\n")
 	b.WriteString("When you see `[WORKERS_RESPAWNED]`, continue monitoring — another ALL_WORKERS_DONE will follow.\n")
@@ -825,13 +915,25 @@ func BuildCollaborativeWorkerPrompt(subtask db.Subtask, allSubtasks []db.Subtask
 	b.WriteString("## IMPORTANT: Wait for Manager Directives\n\n")
 	b.WriteString("Before doing ANY work, you MUST wait for the Team Manager to write your directive file.\n\n")
 	b.WriteString(fmt.Sprintf("**Your directive file**: `.klaudio/directives/%s.md`\n\n", subtask.ID))
-	b.WriteString("Run this loop at the very start:\n")
+	b.WriteString("Run this loop at the very start (timeout after 5 minutes):\n")
 	b.WriteString("```bash\n")
-	b.WriteString(fmt.Sprintf("while [ ! -f .klaudio/directives/%s.md ]; do echo 'Waiting for manager directives...'; sleep 3; done\n", subtask.ID))
-	b.WriteString("echo 'Directives received!'\n")
-	b.WriteString(fmt.Sprintf("cat .klaudio/directives/%s.md\n", subtask.ID))
+	b.WriteString("TIMEOUT=300\n")
+	b.WriteString("ELAPSED=0\n")
+	b.WriteString(fmt.Sprintf("while [ ! -f .klaudio/directives/coordination.md ] || [ ! -f .klaudio/directives/%s.md ]; do\n", subtask.ID))
+	b.WriteString("  if [ $ELAPSED -ge $TIMEOUT ]; then\n")
+	b.WriteString("    echo 'WARNING: Timed out waiting for manager directives after 5 minutes. Proceeding with subtask instructions only.'\n")
+	b.WriteString("    break\n")
+	b.WriteString("  fi\n")
+	b.WriteString("  echo 'Waiting for manager directives...'\n")
+	b.WriteString("  sleep 3\n")
+	b.WriteString("  ELAPSED=$((ELAPSED + 3))\n")
+	b.WriteString("done\n")
+	b.WriteString(fmt.Sprintf("if [ -f .klaudio/directives/%s.md ]; then\n", subtask.ID))
+	b.WriteString("  echo 'Directives received!'\n")
+	b.WriteString(fmt.Sprintf("  cat .klaudio/directives/%s.md\n", subtask.ID))
+	b.WriteString("fi\n")
 	b.WriteString("```\n\n")
-	b.WriteString("Only after reading your directives should you begin working on your subtask.\n")
+	b.WriteString("Only after reading your directives (or the timeout expires) should you begin working on your subtask.\n")
 	b.WriteString("The directives contain important coordination rules, shared contracts, and file ownership info.\n\n")
 
 	b.WriteString("## Your Subtask\n")
@@ -872,10 +974,15 @@ curl -s -X POST %s/api/tasks/%s/messages \
   -d '{"from": "%s", "content": "[WORK_DONE] Summary of completed work here"}'
 `+"```"+`
 
-2. **Enter an approval loop** — poll for messages from the manager every 10 seconds:
+2. **Enter an approval loop** — poll for NEW messages from the manager using cursor-based pagination:
 `+"```bash"+`
+LAST_ID=0
+WAIT_COUNT=0
 while true; do
-  MSG=$(curl -s %s/api/tasks/%s/messages | jq -r '.messages[] | select(.to_subtask_id=="%s" or .to_subtask_id==null) | select(.from_subtask_id=="manager") | .content' | tail -1)
+  RESP=$(curl -s '%s/api/tasks/%s/messages?after_id='$LAST_ID)
+  MSG=$(echo "$RESP" | jq -r '.messages[] | select(.to_subtask_id=="%s" or .to_subtask_id==null) | select(.from_subtask_id=="manager") | .content' | tail -1)
+  NEW_MAX=$(echo "$RESP" | jq '[.messages[].id] | max // 0')
+  if [ "$NEW_MAX" != "null" ] && [ "$NEW_MAX" -gt "$LAST_ID" ] 2>/dev/null; then LAST_ID=$NEW_MAX; fi
   if echo "$MSG" | grep -q '\[WORKER_APPROVED\]'; then
     echo "Manager approved — exiting."
     break
@@ -885,7 +992,13 @@ while true; do
     echo "$MSG"
     break
   fi
-  echo "Waiting for manager approval..."
+  # Check for manager exit signal — do not wait forever
+  if echo "$RESP" | jq -e '.messages[] | select(.msg_type=="system") | select(.content | contains("[MANAGER_EXITED]"))' > /dev/null 2>&1; then
+    echo "Manager has exited — finishing without approval."
+    break
+  fi
+  WAIT_COUNT=$((WAIT_COUNT + 1))
+  echo "Waiting for manager approval... (poll $WAIT_COUNT)"
   sleep 10
 done
 `+"```"+`

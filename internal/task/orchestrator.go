@@ -21,16 +21,18 @@ type Orchestrator struct {
 	pool      *agent.Pool
 	db        *db.DB
 	streamHub *stream.Hub
+	msgBus    *stream.MessageBus
 	cfg       *config.Config
 	comms     *CommsService
 }
 
 // NewOrchestrator creates a new Orchestrator.
-func NewOrchestrator(pool *agent.Pool, database *db.DB, hub *stream.Hub, cfg *config.Config) *Orchestrator {
+func NewOrchestrator(pool *agent.Pool, database *db.DB, hub *stream.Hub, msgBus *stream.MessageBus, cfg *config.Config) *Orchestrator {
 	return &Orchestrator{
 		pool:      pool,
 		db:        database,
 		streamHub: hub,
+		msgBus:    msgBus,
 		cfg:       cfg,
 		comms:     NewCommsService(database),
 	}
