@@ -17,8 +17,9 @@ graph LR
     P8["🖥️ Phase 8<br/><b>Service Installation</b><br/>✅ Complete"]
     P9["🚀 Phase 9<br/><b>CI/CD & Releases</b><br/>⬜ Planned"]
     P10["📊 Phase 10<br/><b>Container Monitoring</b><br/>✅ Complete"]
+    P11["⏳ Phase 11<br/><b>Rate Limit Handling</b><br/>✅ Complete"]
 
-    P1 -.- P2 -.- P3 -.- P4 -.- P5 -.- P6 -.- P6P -.- P7 -.- P8 -.- P9 -.- P10
+    P1 -.- P2 -.- P3 -.- P4 -.- P5 -.- P6 -.- P6P -.- P7 -.- P8 -.- P9 -.- P10 -.- P11
 
     style P1 fill:#059669,stroke:#047857,color:#fff,stroke-width:2px
     style P2 fill:#0d9488,stroke:#0f766e,color:#fff,stroke-width:2px
@@ -31,6 +32,7 @@ graph LR
     style P8 fill:#0ea5e9,stroke:#0284c7,color:#fff,stroke-width:2px
     style P9 fill:#475569,stroke:#64748b,color:#e2e8f0,stroke-width:2px,stroke-dasharray:5
     style P10 fill:#10b981,stroke:#059669,color:#fff,stroke-width:2px
+    style P11 fill:#f59e0b,stroke:#d97706,color:#fff,stroke-width:2px
 
     linkStyle 0 stroke:#10b981,stroke-width:2px,stroke-dasharray:5
     linkStyle 1 stroke:#14b8a6,stroke-width:2px,stroke-dasharray:5
@@ -42,6 +44,7 @@ graph LR
     linkStyle 7 stroke:#64748b,stroke-width:2px,stroke-dasharray:5
     linkStyle 8 stroke:#64748b,stroke-width:2px,stroke-dasharray:5
     linkStyle 9 stroke:#10b981,stroke-width:2px,stroke-dasharray:5
+    linkStyle 10 stroke:#f59e0b,stroke-width:2px,stroke-dasharray:5
 ```
 
 ---
@@ -295,6 +298,23 @@ Manager-directed coordination with inter-agent messaging.
 
 ---
 
+## Phase 11 — Rate Limit Handling ✅
+
+> Auto-wait and retry when Claude Code hits API rate limits, with real-time UI feedback.
+
+| # | Feature | Status |
+|---|---------|--------|
+| 11.1 | Entrypoint retry loop — detect rate limit exit, backoff and retry | ✅ |
+| 11.2 | Stream-JSON rate limit detection — parse output for overloaded/429 events | ✅ |
+| 11.3 | Rate limit event broadcasting via StreamHub | ✅ |
+| 11.4 | Per-agent rate limit state tracking | ✅ |
+| 11.5 | UI: rate limit banner with countdown timer | ✅ |
+| 11.6 | UI: real-time remaining % and reset time display | ✅ |
+| 11.7 | Configurable max retries and backoff strategy | ✅ |
+| 11.8 | Rate limit events in task event log | ✅ |
+
+---
+
 ## Future Ideas
 
 - **Authentication & multi-user** — accounts, API keys, RBAC
@@ -324,3 +344,4 @@ Manager-directed coordination with inter-agent messaging.
 | 8. Service Install | ✅ | Windows/Linux service |
 | 9. CI/CD & Releases | ⬜ | Pipelines, auto-update |
 | 10. Container Monitoring | ✅ | Real-time CPU, memory, network, I/O stats |
+| 11. Rate Limit Handling | ✅ | Auto-wait/retry on rate limits, real-time UI |

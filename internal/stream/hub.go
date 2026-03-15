@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"bytes"
 	"encoding/json"
 	"log/slog"
 	"sync"
@@ -29,6 +30,11 @@ type hubMsg struct {
 	result  chan any // for synchronous replies (RegisterAgent, GetBackfill, etc.)
 }
 
+// RateLimitHandler is a callback invoked when rate limit events are detected
+// in agent output. It allows external packages to react without creating
+// import cycles.
+type RateLimitHandler func(agentID, taskID string, data []byte)
+
 // Hub is the central real-time data router. It manages agent output streams
 // and WebSocket client subscriptions. All mutations go through a single event
 // loop goroutine to avoid lock contention on the hot path; read-only helpers
@@ -38,6 +44,8 @@ type Hub struct {
 	streams         map[string]*AgentStream // agentID -> active stream
 	finishedBuffers map[string]*finishedAgent // agentID -> preserved buffer for backfill
 	clients         map[string][]*Client    // taskID -> connected clients
+
+	rateLimitHandler RateLimitHandler
 
 	msgCh    chan hubMsg
 	shutdown chan struct{}
@@ -61,6 +69,11 @@ func NewHub() *Hub {
 		shutdown:        make(chan struct{}),
 		done:            make(chan struct{}),
 	}
+}
+
+// SetRateLimitHandler registers a callback for rate limit detection in agent output.
+func (h *Hub) SetRateLimitHandler(handler RateLimitHandler) {
+	h.rateLimitHandler = handler
 }
 
 // Run is the main event loop. It should be started in its own goroutine.
@@ -143,6 +156,11 @@ func (h *Hub) pumpAgentOutput(as *AgentStream) {
 			totalBytes += len(data)
 			// Buffer the data for late joiners.
 			as.Buffer.Write(data) //nolint:errcheck
+
+			// Check for rate limit events in the output.
+			if h.rateLimitHandler != nil && bytes.Contains(data, []byte("rate_limit")) {
+				h.rateLimitHandler(as.AgentID, as.TaskID, data)
+			}
 
 			// Fan out to subscribed clients.
 			h.mu.RLock()

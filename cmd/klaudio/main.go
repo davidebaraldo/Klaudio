@@ -16,6 +16,7 @@ import (
 	"github.com/klaudio-ai/klaudio/internal/docker"
 	"github.com/klaudio-ai/klaudio/internal/embedded"
 	"github.com/klaudio-ai/klaudio/internal/files"
+	"github.com/klaudio-ai/klaudio/internal/ratelimit"
 	svcpkg "github.com/klaudio-ai/klaudio/internal/service"
 	"github.com/klaudio-ai/klaudio/internal/stream"
 	"github.com/klaudio-ai/klaudio/internal/task"
@@ -169,6 +170,26 @@ func runServer(stop <-chan struct{}) error {
 	streamHub := stream.NewHub()
 	go streamHub.Run()
 
+	// Create rate limit tracker and wire it into the stream hub
+	rlTracker := ratelimit.NewTracker()
+	streamHub.SetRateLimitHandler(func(agentID, taskID string, data []byte) {
+		state := rlTracker.DetectFromOutput(agentID, taskID, data)
+		if state != nil {
+			// Broadcast rate limit event to all WebSocket clients for this task
+			eventType := "rate_limit"
+			if !state.IsLimited {
+				eventType = "rate_limit_retry"
+			}
+			streamHub.BroadcastEvent(taskID, stream.Event{
+				Type:      eventType,
+				EventName: eventType,
+				Data:      state,
+			})
+			slog.Info("rate limit detected", "agent_id", agentID, "task_id", taskID,
+				"limited", state.IsLimited, "retry_in", state.RetryIn, "attempt", state.Attempt)
+		}
+	})
+
 	// Create MessageBus for real-time agent message delivery
 	msgBus := stream.NewMessageBus()
 
@@ -180,14 +201,15 @@ func runServer(stop <-chan struct{}) error {
 
 	// Build HTTP router with all services populated
 	services := &api.Services{
-		DB:          database,
-		Docker:      dockerMgr,
-		Config:      cfg,
-		StreamHub:   streamHub,
-		MessageBus:  msgBus,
-		TaskManager: taskMgr,
-		FileManager: fileMgr,
-		Pool:        taskMgr.Pool,
+		DB:               database,
+		Docker:           dockerMgr,
+		Config:           cfg,
+		StreamHub:        streamHub,
+		MessageBus:       msgBus,
+		TaskManager:      taskMgr,
+		FileManager:      fileMgr,
+		Pool:             taskMgr.Pool,
+		RateLimitTracker: rlTracker,
 	}
 	router := api.NewRouter(cfg, services)
 
