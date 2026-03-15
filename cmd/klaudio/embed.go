@@ -20,12 +20,21 @@ var dockerFS embed.FS
 //go:embed all:frontend
 var frontendFS embed.FS
 
+// Embed SQL migration files so the binary is self-contained.
+// The migrations/ directory is populated by the Makefile before "go build".
+//
+//go:embed all:migrations
+var migrationsFS embed.FS
+
 func init() {
 	// Register Docker build context files
 	registerDockerFiles()
 
 	// Register frontend filesystem
 	registerFrontend()
+
+	// Register migrations filesystem
+	registerMigrations()
 }
 
 func registerDockerFiles() {
@@ -60,4 +69,12 @@ func registerFrontend() {
 		return
 	}
 	embedded.RegisterFrontend(sub)
+}
+
+func registerMigrations() {
+	sub, err := fs.Sub(migrationsFS, "migrations")
+	if err != nil {
+		return
+	}
+	embedded.RegisterMigrations(sub)
 }

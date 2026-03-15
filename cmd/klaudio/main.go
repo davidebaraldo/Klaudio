@@ -14,6 +14,7 @@ import (
 	"github.com/klaudio-ai/klaudio/internal/config"
 	"github.com/klaudio-ai/klaudio/internal/db"
 	"github.com/klaudio-ai/klaudio/internal/docker"
+	"github.com/klaudio-ai/klaudio/internal/embedded"
 	"github.com/klaudio-ai/klaudio/internal/files"
 	svcpkg "github.com/klaudio-ai/klaudio/internal/service"
 	"github.com/klaudio-ai/klaudio/internal/stream"
@@ -123,9 +124,13 @@ func runServer(stop <-chan struct{}) error {
 	}
 	defer database.Close()
 
-	// Run migrations
+	// Run migrations from embedded filesystem
 	slog.Info("running database migrations")
-	if err := database.Migrate(context.Background(), "migrations"); err != nil {
+	migFS := embedded.MigrationsFS()
+	if migFS == nil {
+		return fmt.Errorf("embedded migrations not found")
+	}
+	if err := database.MigrateFS(context.Background(), migFS); err != nil {
 		return fmt.Errorf("running migrations: %w", err)
 	}
 

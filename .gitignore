@@ -7,6 +7,10 @@ bin/
 cmd/klaudio/frontend/*
 !cmd/klaudio/frontend/.gitkeep
 
+# Embedded migrations (copied by Makefile before go build)
+cmd/klaudio/migrations/*
+!cmd/klaudio/migrations/.gitkeep
+
 # Runtime data
 data/
 klaudio.log

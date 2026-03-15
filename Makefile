@@ -1,4 +1,4 @@
-.PHONY: build run docker-build test clean tidy migrate frontend
+.PHONY: build run docker-build test clean tidy migrate frontend embed-migrations
 
 # Binary output
 BINARY := klaudio
@@ -15,18 +15,26 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 FRONTEND_SRC := web
 FRONTEND_BUILD := $(FRONTEND_SRC)/build
 EMBED_FRONTEND := cmd/klaudio/frontend
+EMBED_MIGRATIONS := cmd/klaudio/migrations
 
-## Build the full binary (frontend + Docker context embedded)
-build: frontend
+## Build the full binary (frontend + migrations + Docker context embedded)
+build: frontend embed-migrations
 	@echo "Building $(BINARY)..."
 	@mkdir -p $(BUILD_DIR)
 	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) ./cmd/klaudio
 
 ## Build Go binary only (no frontend, faster for backend development)
-build-backend:
+build-backend: embed-migrations
 	@echo "Building $(BINARY) (backend only)..."
 	@mkdir -p $(BUILD_DIR)
 	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) ./cmd/klaudio
+
+## Copy SQL migrations into embed directory
+embed-migrations:
+	@echo "Copying migrations to embed directory..."
+	@rm -rf $(EMBED_MIGRATIONS)
+	@mkdir -p $(EMBED_MIGRATIONS)
+	@cp migrations/*.sql $(EMBED_MIGRATIONS)/ 2>/dev/null || echo "Warning: no migration files found"
 
 ## Build the SvelteKit frontend
 frontend:
@@ -64,6 +72,9 @@ clean:
 	rm -rf $(EMBED_FRONTEND)
 	@mkdir -p $(EMBED_FRONTEND)
 	@touch $(EMBED_FRONTEND)/.gitkeep
+	rm -rf $(EMBED_MIGRATIONS)
+	@mkdir -p $(EMBED_MIGRATIONS)
+	@touch $(EMBED_MIGRATIONS)/.gitkeep
 	rm -rf data/klaudio.db
 
 ## Run go mod tidy
