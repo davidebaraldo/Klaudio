@@ -43,6 +43,9 @@ jobs:
       - name: Build frontend
         run: make frontend
 
+      - name: Embed migrations
+        run: make embed-migrations
+
       - name: Build binary
         env:
           GOOS: ${{ matrix.os }}

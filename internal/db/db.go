@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 
 	_ "modernc.org/sqlite"
 )
@@ -43,9 +45,9 @@ func Open(dbPath string) (*DB, error) {
 	return &DB{DB: sqlDB}, nil
 }
 
-// Migrate runs all SQL migration files from the given directory in order.
+// MigrateFS runs all SQL migration files from an fs.FS in sorted order.
 // It tracks which migrations have been applied in a _migrations table.
-func (db *DB) Migrate(ctx context.Context, migrationsDir string) error {
+func (db *DB) MigrateFS(ctx context.Context, fsys fs.FS) error {
 	// Create the migrations tracking table
 	_, err := db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS _migrations (
@@ -58,10 +60,15 @@ func (db *DB) Migrate(ctx context.Context, migrationsDir string) error {
 		return fmt.Errorf("creating migrations table: %w", err)
 	}
 
-	entries, err := os.ReadDir(migrationsDir)
+	entries, err := fs.ReadDir(fsys, ".")
 	if err != nil {
-		return fmt.Errorf("reading migrations directory %s: %w", migrationsDir, err)
+		return fmt.Errorf("reading migrations filesystem: %w", err)
 	}
+
+	// Sort entries by name to ensure deterministic order
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name() < entries[j].Name()
+	})
 
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -83,7 +90,7 @@ func (db *DB) Migrate(ctx context.Context, migrationsDir string) error {
 		}
 
 		// Read and execute migration
-		content, err := os.ReadFile(filepath.Join(migrationsDir, name))
+		content, err := fs.ReadFile(fsys, name)
 		if err != nil {
 			return fmt.Errorf("reading migration %s: %w", name, err)
 		}
@@ -109,4 +116,9 @@ func (db *DB) Migrate(ctx context.Context, migrationsDir string) error {
 	}
 
 	return nil
+}
+
+// Migrate runs migrations from a directory on disk. Kept for backward compatibility.
+func (db *DB) Migrate(ctx context.Context, migrationsDir string) error {
+	return db.MigrateFS(ctx, os.DirFS(migrationsDir))
 }
