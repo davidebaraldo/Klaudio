@@ -15,6 +15,7 @@ import (
 	"github.com/klaudio-ai/klaudio/internal/db"
 	"github.com/klaudio-ai/klaudio/internal/docker"
 	"github.com/klaudio-ai/klaudio/internal/files"
+	svcpkg "github.com/klaudio-ai/klaudio/internal/service"
 	"github.com/klaudio-ai/klaudio/internal/stream"
 	"github.com/klaudio-ai/klaudio/internal/task"
 )
@@ -31,35 +32,87 @@ func main() {
 		return
 	}
 
+	// Handle service subcommands: klaudio service install|uninstall|start|stop|status
+	if svcpkg.HandleCLI(os.Args) {
+		return
+	}
+
 	// Configure structured logging
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
 	slog.SetDefault(logger)
 
+	// If running as a Windows service, use service logging (file + event log)
+	if svcpkg.IsRunningAsService() {
+		svcpkg.SetupServiceLogging()
+	}
+
 	slog.Info("starting klaudio", "version", version)
 
-	if err := run(); err != nil {
+	// Check Docker availability early
+	if err := svcpkg.CheckDockerAvailability(); err != nil {
+		slog.Warn("Docker check failed — tasks will fail until Docker is available", "error", err)
+	}
+
+	// If started by the OS service manager, run in service mode
+	if svcpkg.IsRunningAsService() {
+		slog.Info("running as system service")
+		if err := svcpkg.RunAsService(runServer); err != nil {
+			slog.Error("service error", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Normal foreground mode (also handles "klaudio run" subcommand)
+	if err := runForeground(); err != nil {
 		slog.Error("fatal error", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+// runForeground runs the server in the foreground with signal handling.
+func runForeground() error {
+	stop := make(chan struct{})
+
+	// Start the server in a goroutine
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runServer(stop)
+	}()
+
+	// Wait for shutdown signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case sig := <-quit:
+		slog.Info("received shutdown signal", "signal", sig)
+		close(stop)
+		// Wait for server to finish
+		return <-errCh
+	case err := <-errCh:
+		return err
+	}
+}
+
+// runServer is the core server function used by both foreground and service modes.
+// It blocks until the stop channel is closed or a fatal error occurs.
+func runServer(stop <-chan struct{}) error {
 	// Determine config file path
-	cfgPath := "config.yaml"
-	if v := os.Getenv("KLAUDIO_CONFIG"); v != "" {
-		cfgPath = v
-	}
-	if len(os.Args) > 1 {
-		cfgPath = os.Args[1]
-	}
+	cfgPath := resolveConfigPath()
 
 	// Load configuration
 	slog.Info("loading configuration", "path", cfgPath)
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
+	}
+
+	// If running as service, override paths to platform-appropriate locations
+	if svcpkg.IsRunningAsService() {
+		applyServicePaths(cfg)
 	}
 
 	// Initialize database
@@ -152,19 +205,15 @@ func run() error {
 		}
 	}()
 
-	// Wait for shutdown signal
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
+	// Wait for stop signal or server error
 	select {
-	case sig := <-quit:
-		slog.Info("received shutdown signal", "signal", sig)
+	case <-stop:
+		slog.Info("shutting down server...")
 	case err := <-errCh:
 		return fmt.Errorf("server error: %w", err)
 	}
 
 	// Graceful shutdown
-	slog.Info("shutting down server...")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -178,4 +227,45 @@ func run() error {
 
 	slog.Info("server stopped gracefully")
 	return nil
+}
+
+// resolveConfigPath determines the config file path from env/args.
+func resolveConfigPath() string {
+	cfgPath := "config.yaml"
+	if v := os.Getenv("KLAUDIO_CONFIG"); v != "" {
+		cfgPath = v
+	}
+
+	// Skip "run" subcommand when looking for config path argument
+	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "run" {
+		args = args[1:]
+	}
+	if len(args) > 0 && args[0] != "service" && args[0] != "--version" && args[0] != "-v" {
+		cfgPath = args[0]
+	}
+
+	// If running as service, use platform config path as default
+	if svcpkg.IsRunningAsService() && os.Getenv("KLAUDIO_CONFIG") == "" {
+		cfgPath = svcpkg.ConfigFilePath()
+	}
+
+	return cfgPath
+}
+
+// applyServicePaths overrides config paths with platform-appropriate service paths,
+// but only for values that still have the defaults.
+func applyServicePaths(cfg *config.Config) {
+	if cfg.Database.Path == "data/klaudio.db" {
+		cfg.Database.Path = svcpkg.DatabasePath()
+	}
+	if cfg.Storage.DataDir == "data" {
+		cfg.Storage.DataDir = svcpkg.DataDir()
+	}
+	if cfg.Storage.StatesDir == "data/states" {
+		cfg.Storage.StatesDir = svcpkg.StatesDir()
+	}
+	if cfg.Storage.FilesDir == "data/files" {
+		cfg.Storage.FilesDir = svcpkg.FilesDir()
+	}
 }

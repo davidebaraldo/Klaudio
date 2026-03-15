@@ -14,7 +14,7 @@ graph LR
     P6["👥 Phase 6<br/><b>Team Agents</b><br/>✅ Complete"]
     P6P["🤝 Phase 6+<br/><b>Collaborative + Comms</b><br/>✅ Complete"]
     P7["🌍 Phase 7<br/><b>Multi-Platform Git</b><br/>🔶 Partial"]
-    P8["🖥️ Phase 8<br/><b>Service Installation</b><br/>⬜ Planned"]
+    P8["🖥️ Phase 8<br/><b>Service Installation</b><br/>✅ Complete"]
     P9["🚀 Phase 9<br/><b>CI/CD & Releases</b><br/>⬜ Planned"]
 
     P1 -.- P2 -.- P3 -.- P4 -.- P5 -.- P6 -.- P6P -.- P7 -.- P8 -.- P9
@@ -27,7 +27,7 @@ graph LR
     style P6 fill:#d946ef,stroke:#c026d3,color:#fff,stroke-width:2px
     style P6P fill:#ec4899,stroke:#db2777,color:#fff,stroke-width:2px
     style P7 fill:#d97706,stroke:#b45309,color:#fff,stroke-width:2px
-    style P8 fill:#475569,stroke:#64748b,color:#e2e8f0,stroke-width:2px,stroke-dasharray:5
+    style P8 fill:#0ea5e9,stroke:#0284c7,color:#fff,stroke-width:2px
     style P9 fill:#475569,stroke:#64748b,color:#e2e8f0,stroke-width:2px,stroke-dasharray:5
 
     linkStyle 0 stroke:#10b981,stroke-width:2px,stroke-dasharray:5
@@ -225,26 +225,26 @@ Manager-directed coordination with inter-agent messaging.
 
 ---
 
-## Phase 8 — Service Installation ⬜
+## Phase 8 — Service Installation ✅
 
 > Run Klaudio as a native OS service with auto-start and management.
 
 | # | Feature | Status |
 |---|---------|--------|
-| 8.1 | Windows Service via `golang.org/x/sys/windows/svc` | ⬜ |
+| 8.1 | Windows Service via `golang.org/x/sys/windows/svc` | ✅ |
 | 8.2 | Windows installer (MSI/NSIS) | ⬜ |
-| 8.3 | Windows Event Log integration | ⬜ |
+| 8.3 | Windows Event Log integration | ✅ |
 | 8.4 | System tray icon (optional) | ⬜ |
-| 8.5 | Linux systemd unit file | ⬜ |
-| 8.6 | Linux install script | ⬜ |
-| 8.7 | journald logging integration | ⬜ |
-| 8.8 | CLI: `klaudio install/uninstall/start/stop/status` | ⬜ |
-| 8.9 | Cross-platform service abstraction | ⬜ |
-| 8.10 | Auto-restart and watchdog | ⬜ |
-| 8.11 | Platform-appropriate config paths | ⬜ |
-| 8.12 | Log rotation | ⬜ |
-| 8.13 | Docker dependency check on start | ⬜ |
-| 8.14 | Graceful shutdown on service stop | ⬜ |
+| 8.5 | Linux systemd unit file | ✅ |
+| 8.6 | Linux install script | ✅ |
+| 8.7 | journald logging integration | ✅ |
+| 8.8 | CLI: `klaudio install/uninstall/start/stop/status` | ✅ |
+| 8.9 | Cross-platform service abstraction | ✅ |
+| 8.10 | Auto-restart and watchdog | ✅ |
+| 8.11 | Platform-appropriate config paths | ✅ |
+| 8.12 | Log rotation | ✅ |
+| 8.13 | Docker dependency check on start | ✅ |
+| 8.14 | Graceful shutdown on service stop | ✅ |
 
 ---
 
@@ -301,5 +301,5 @@ Manager-directed coordination with inter-agent messaging.
 | 6. Team Agents | ✅ | Agent pool, DAG execution, file locking |
 | 6+. Collaborative | ✅ | Manager/workers, directives, messaging |
 | 7. Multi-Platform Git | 🔶 | GitHub + Bitbucket auto-PR, GitLab planned |
-| 8. Service Install | ⬜ | Windows/Linux service |
+| 8. Service Install | ✅ | Windows/Linux service |
 | 9. CI/CD & Releases | ⬜ | Pipelines, auto-update |
