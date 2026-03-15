@@ -3,6 +3,7 @@ package docker
 import (
 	"archive/tar"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -292,6 +293,80 @@ func (m *Manager) CopyFromContainer(ctx context.Context, containerID, srcPath, d
 	}
 
 	return nil
+}
+
+// ContainerStats represents a snapshot of container resource usage.
+type ContainerStats struct {
+	CPUPercent    float64 `json:"cpu_percent"`
+	MemoryUsage  uint64  `json:"memory_usage"`   // bytes
+	MemoryLimit  uint64  `json:"memory_limit"`   // bytes
+	MemoryPercent float64 `json:"memory_percent"`
+	NetRx        uint64  `json:"net_rx"`          // bytes received
+	NetTx        uint64  `json:"net_tx"`          // bytes sent
+	BlockRead    uint64  `json:"block_read"`      // bytes read
+	BlockWrite   uint64  `json:"block_write"`     // bytes written
+	PIDs         uint64  `json:"pids"`
+}
+
+// GetContainerStats returns a one-shot stats snapshot for a container.
+func (m *Manager) GetContainerStats(ctx context.Context, containerID string) (*ContainerStats, error) {
+	resp, err := m.client.ContainerStats(ctx, containerID, false)
+	if err != nil {
+		return nil, fmt.Errorf("getting container stats: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var raw container.StatsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("decoding container stats: %w", err)
+	}
+
+	return parseStats(&raw), nil
+}
+
+// parseStats converts Docker's StatsJSON into our simplified ContainerStats.
+func parseStats(raw *container.StatsResponse) *ContainerStats {
+	s := &ContainerStats{
+		MemoryUsage: raw.MemoryStats.Usage,
+		MemoryLimit: raw.MemoryStats.Limit,
+		PIDs:        raw.PidsStats.Current,
+	}
+
+	// Memory percent
+	if s.MemoryLimit > 0 {
+		s.MemoryPercent = float64(s.MemoryUsage) / float64(s.MemoryLimit) * 100
+	}
+
+	// CPU percent (delta-based)
+	cpuDelta := float64(raw.CPUStats.CPUUsage.TotalUsage - raw.PreCPUStats.CPUUsage.TotalUsage)
+	sysDelta := float64(raw.CPUStats.SystemUsage - raw.PreCPUStats.SystemUsage)
+	if sysDelta > 0 && cpuDelta > 0 {
+		cpuCount := float64(raw.CPUStats.OnlineCPUs)
+		if cpuCount == 0 {
+			cpuCount = float64(len(raw.CPUStats.CPUUsage.PercpuUsage))
+		}
+		if cpuCount > 0 {
+			s.CPUPercent = (cpuDelta / sysDelta) * cpuCount * 100
+		}
+	}
+
+	// Network I/O (sum all interfaces)
+	for _, v := range raw.Networks {
+		s.NetRx += v.RxBytes
+		s.NetTx += v.TxBytes
+	}
+
+	// Block I/O
+	for _, bio := range raw.BlkioStats.IoServiceBytesRecursive {
+		switch bio.Op {
+		case "read", "Read":
+			s.BlockRead += bio.Value
+		case "write", "Write":
+			s.BlockWrite += bio.Value
+		}
+	}
+
+	return s
 }
 
 // buildEnvList converts a map of environment variables to a slice of "KEY=VALUE" strings.

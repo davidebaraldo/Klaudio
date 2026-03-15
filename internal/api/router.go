@@ -48,6 +48,7 @@ func NewRouter(cfg *config.Config, svc *Services) chi.Router {
 	r.Route("/ws", func(ws chi.Router) {
 		ws.Get("/tasks/{taskID}/stream", h.HandleTaskStream)
 		ws.Get("/tasks/{taskID}/messages", h.HandleMessageStream)
+		ws.Get("/tasks/{taskID}/stats", h.HandleStatsStream)
 	})
 
 	r.Route("/api", func(r chi.Router) {
@@ -104,6 +105,9 @@ func NewRouter(cfg *config.Config, svc *Services) chi.Router {
 			// Agent messages (inter-agent communication)
 			r.Get("/{taskID}/messages", h.ListAgentMessages)
 			r.Post("/{taskID}/messages", h.SendAgentMessage)
+
+			// Container stats
+			r.Get("/{taskID}/stats", h.GetTaskStats)
 		})
 
 		// Phase 3 — WebSocket streaming (no middleware timeout for long-lived connections)

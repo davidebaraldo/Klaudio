@@ -22,6 +22,7 @@
 	import QuestionPanel from '$lib/components/QuestionPanel.svelte';
 	import AgentComms from '$lib/components/AgentComms.svelte';
 	import AgentGrid from '$lib/components/AgentGrid.svelte';
+	import StatsPanel from '$lib/components/StatsPanel.svelte';
 
 	const { data } = $props();
 
@@ -32,7 +33,7 @@
 		if (data.task) task = data.task;
 	});
 	let plan = $state<Plan | null>(null);
-	let activeTab = $state<'plan' | 'agents' | 'comms' | 'files'>('agents');
+	let activeTab = $state<'plan' | 'agents' | 'comms' | 'files' | 'stats'>('agents');
 	let error = $state('');
 	let actionLoading = $state('');
 	let wsEvents = $state<StreamEvent[]>([]);
@@ -337,7 +338,7 @@
 
 		<!-- Tabs -->
 		<div class="flex border-b border-zinc-800 mb-4">
-			{#each ['plan', 'agents', 'comms', 'files'] as tab}
+			{#each ['plan', 'agents', 'comms', 'files', 'stats'] as tab}
 				<button
 					onclick={() => { activeTab = tab as typeof activeTab; }}
 					class="px-4 py-2 text-sm border-b-2 transition-colors -mb-px
@@ -376,6 +377,8 @@
 				<AgentComms taskId={data.taskId} subtasks={plan?.subtasks ?? []} />
 			{:else if activeTab === 'files'}
 				<FileManager taskId={data.taskId} />
+			{:else if activeTab === 'stats'}
+				<StatsPanel taskId={data.taskId} />
 			{/if}
 		</div>
 	{/if}

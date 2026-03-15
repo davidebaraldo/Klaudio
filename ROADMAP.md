@@ -16,8 +16,9 @@ graph LR
     P7["🌍 Phase 7<br/><b>Multi-Platform Git</b><br/>🔶 Partial"]
     P8["🖥️ Phase 8<br/><b>Service Installation</b><br/>✅ Complete"]
     P9["🚀 Phase 9<br/><b>CI/CD & Releases</b><br/>⬜ Planned"]
+    P10["📊 Phase 10<br/><b>Container Monitoring</b><br/>✅ Complete"]
 
-    P1 -.- P2 -.- P3 -.- P4 -.- P5 -.- P6 -.- P6P -.- P7 -.- P8 -.- P9
+    P1 -.- P2 -.- P3 -.- P4 -.- P5 -.- P6 -.- P6P -.- P7 -.- P8 -.- P9 -.- P10
 
     style P1 fill:#059669,stroke:#047857,color:#fff,stroke-width:2px
     style P2 fill:#0d9488,stroke:#0f766e,color:#fff,stroke-width:2px
@@ -29,6 +30,7 @@ graph LR
     style P7 fill:#d97706,stroke:#b45309,color:#fff,stroke-width:2px
     style P8 fill:#0ea5e9,stroke:#0284c7,color:#fff,stroke-width:2px
     style P9 fill:#475569,stroke:#64748b,color:#e2e8f0,stroke-width:2px,stroke-dasharray:5
+    style P10 fill:#10b981,stroke:#059669,color:#fff,stroke-width:2px
 
     linkStyle 0 stroke:#10b981,stroke-width:2px,stroke-dasharray:5
     linkStyle 1 stroke:#14b8a6,stroke-width:2px,stroke-dasharray:5
@@ -39,6 +41,7 @@ graph LR
     linkStyle 6 stroke:#64748b,stroke-width:2px,stroke-dasharray:5
     linkStyle 7 stroke:#64748b,stroke-width:2px,stroke-dasharray:5
     linkStyle 8 stroke:#64748b,stroke-width:2px,stroke-dasharray:5
+    linkStyle 9 stroke:#10b981,stroke-width:2px,stroke-dasharray:5
 ```
 
 ---
@@ -275,6 +278,23 @@ Manager-directed coordination with inter-agent messaging.
 
 ---
 
+## Phase 10 — Container Monitoring ✅
+
+> Real-time Docker container resource usage: CPU, memory, network, block I/O.
+
+| # | Feature | Status |
+|---|---------|--------|
+| 10.1 | Docker stats collection via SDK `ContainerStats()` | ✅ |
+| 10.2 | Stats API endpoint — GET /api/tasks/{taskID}/stats | ✅ |
+| 10.3 | WebSocket stats streaming — /ws/tasks/{taskID}/stats | ✅ |
+| 10.4 | Per-agent CPU, memory, network, block I/O metrics | ✅ |
+| 10.5 | UI: live stats dashboard with gauges and charts | ✅ |
+| 10.6 | UI: per-agent resource breakdown | ✅ |
+| 10.7 | Historical stats aggregation | ⬜ |
+| 10.8 | Resource alerts and thresholds | ⬜ |
+
+---
+
 ## Future Ideas
 
 - **Authentication & multi-user** — accounts, API keys, RBAC
@@ -303,3 +323,4 @@ Manager-directed coordination with inter-agent messaging.
 | 7. Multi-Platform Git | 🔶 | GitHub + Bitbucket auto-PR, GitLab planned |
 | 8. Service Install | ✅ | Windows/Linux service |
 | 9. CI/CD & Releases | ⬜ | Pipelines, auto-update |
+| 10. Container Monitoring | ✅ | Real-time CPU, memory, network, I/O stats |
