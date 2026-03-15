@@ -263,20 +263,22 @@ export function getEvents(taskId: string) {
 // ---- Config ----
 
 export interface AppConfig {
-	server: { port: number };
-	docker: { max_agents: number; image_name: string };
-	claude: { auth_mode: string };
-	storage: { data_dir: string };
+	server: { port: number; host: string };
+	docker: { host: string; image_name: string; network: string; max_agents: number; max_agents_per_task: number };
+	claude: { auth_mode: string; host_dir: string; host_json_file: string; has_session_key: boolean };
+	database: { path: string };
+	storage: { data_dir: string; states_dir: string; files_dir: string };
+	state: { auto_save_enabled: boolean; auto_save_interval: string; max_checkpoints: number; retention_days: number };
 }
 
 export function getConfig() {
 	return request<AppConfig>('/config');
 }
 
-export function updateAuth(authMode: string, sessionKey?: string) {
-	return request<{ updated: boolean }>('/config/auth', {
+export function updateConfig(data: Record<string, unknown>) {
+	return request<AppConfig>('/config', {
 		method: 'PUT',
-		body: JSON.stringify({ auth_mode: authMode, ...(sessionKey ? { session_key: sessionKey } : {}) })
+		body: JSON.stringify(data)
 	});
 }
 
@@ -334,6 +336,10 @@ export function createRepoTemplate(data: CreateRepoTemplateRequest) {
 	return request<RepoTemplate>('/repo-templates', { method: 'POST', body: JSON.stringify(data) });
 }
 
+export function updateRepoTemplate(id: string, data: CreateRepoTemplateRequest) {
+	return request<RepoTemplate>(`/repo-templates/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
 export function deleteRepoTemplate(id: string) {
 	return request<void>(`/repo-templates/${id}`, { method: 'DELETE' });
 }
@@ -386,6 +392,10 @@ export function getTeamTemplates() {
 
 export function createTeamTemplate(data: CreateTeamTemplateRequest) {
 	return request<TeamTemplate>('/team-templates', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateTeamTemplate(id: string, data: CreateTeamTemplateRequest) {
+	return request<TeamTemplate>(`/team-templates/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
 export function deleteTeamTemplate(id: string) {
