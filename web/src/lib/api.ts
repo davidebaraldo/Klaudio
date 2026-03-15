@@ -419,3 +419,35 @@ export interface AgentMessage {
 export function getAgentMessages(taskId: string) {
 	return request<{ messages: AgentMessage[] }>(`/tasks/${taskId}/messages`);
 }
+
+// ---- Container Stats ----
+
+export interface ContainerStats {
+	cpu_percent: number;
+	memory_usage: number;
+	memory_limit: number;
+	memory_percent: number;
+	net_rx: number;
+	net_tx: number;
+	block_read: number;
+	block_write: number;
+	pids: number;
+}
+
+export interface AgentStats {
+	agent_id: string;
+	subtask_id: string;
+	role: string;
+	container_id: string;
+	stats: ContainerStats;
+}
+
+export interface TaskStats {
+	task_id: string;
+	agents: AgentStats[];
+	timestamp: string;
+}
+
+export function getTaskStats(taskId: string) {
+	return request<TaskStats>(`/tasks/${taskId}/stats`);
+}

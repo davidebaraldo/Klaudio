@@ -168,3 +168,65 @@ export function createMessageStream(taskId: string) {
 
 	return { messages, connected, connect, disconnect };
 }
+
+// ---- Stats Streaming ----
+
+import type { TaskStats } from '$lib/api';
+
+/**
+ * Creates a real-time WebSocket stream for container stats on a task.
+ * Updates at the specified interval (default 2s).
+ */
+export function createStatsStream(taskId: string, interval = '2s') {
+	const stats = writable<TaskStats | null>(null);
+	const connected = writable(false);
+
+	let ws: WebSocket | null = null;
+	let shouldReconnect = true;
+	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function connect() {
+		if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+			return;
+		}
+
+		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+		const url = `${proto}//${location.host}/ws/tasks/${taskId}/stats?interval=${interval}`;
+		ws = new WebSocket(url);
+
+		ws.onopen = () => {
+			connected.set(true);
+		};
+
+		ws.onclose = () => {
+			connected.set(false);
+			if (shouldReconnect) {
+				reconnectTimer = setTimeout(connect, 3000);
+			}
+		};
+
+		ws.onerror = () => {};
+
+		ws.onmessage = (e: MessageEvent) => {
+			if (typeof e.data !== 'string') return;
+			try {
+				const data: TaskStats = JSON.parse(e.data);
+				stats.set(data);
+			} catch {
+				// ignore
+			}
+		};
+	}
+
+	function disconnect() {
+		shouldReconnect = false;
+		if (reconnectTimer) {
+			clearTimeout(reconnectTimer);
+			reconnectTimer = null;
+		}
+		ws?.close();
+		ws = null;
+	}
+
+	return { stats, connected, connect, disconnect };
+}
