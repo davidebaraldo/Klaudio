@@ -34,6 +34,7 @@ type TaskManager struct {
 	stateStore   *state.StateStore
 	Pool         *agent.Pool
 	streamHub    *stream.Hub
+	msgBus       *stream.MessageBus
 	orchestrator *Orchestrator
 
 	// mu guards the cancels map.
@@ -42,7 +43,7 @@ type TaskManager struct {
 }
 
 // NewTaskManager creates a new TaskManager with all dependencies.
-func NewTaskManager(database *db.DB, dockerMgr *docker.Manager, cfg *config.Config, hub *stream.Hub) *TaskManager {
+func NewTaskManager(database *db.DB, dockerMgr *docker.Manager, cfg *config.Config, hub *stream.Hub, msgBus *stream.MessageBus) *TaskManager {
 	ss := state.NewStateStore(cfg.Storage.StatesDir, database)
 	pool := agent.NewPool(dockerMgr, hub, database, cfg)
 	return &TaskManager{
@@ -54,7 +55,8 @@ func NewTaskManager(database *db.DB, dockerMgr *docker.Manager, cfg *config.Conf
 		stateStore:   ss,
 		Pool:         pool,
 		streamHub:    hub,
-		orchestrator: NewOrchestrator(pool, database, hub, cfg),
+		msgBus:       msgBus,
+		orchestrator: NewOrchestrator(pool, database, hub, msgBus, cfg),
 		cancels:      make(map[string]context.CancelFunc),
 	}
 }

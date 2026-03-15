@@ -111,8 +111,11 @@ func run() error {
 	streamHub := stream.NewHub()
 	go streamHub.Run()
 
+	// Create MessageBus for real-time agent message delivery
+	msgBus := stream.NewMessageBus()
+
 	// Create TaskManager (creates its own StateStore, Pool, and Orchestrator internally)
-	taskMgr := task.NewTaskManager(database, dockerMgr, cfg, streamHub)
+	taskMgr := task.NewTaskManager(database, dockerMgr, cfg, streamHub, msgBus)
 
 	// Create FileManager for file upload/download operations
 	fileMgr := files.NewManager(database, dockerMgr.Client(), cfg)
@@ -123,6 +126,7 @@ func run() error {
 		Docker:      dockerMgr,
 		Config:      cfg,
 		StreamHub:   streamHub,
+		MessageBus:  msgBus,
 		TaskManager: taskMgr,
 		FileManager: fileMgr,
 		Pool:        taskMgr.Pool,

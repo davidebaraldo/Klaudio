@@ -159,9 +159,12 @@ curl -s -X POST %s/api/tasks/%s/messages \
 ` + "```" + `
 
 ### Reading messages from other agents
-To see messages from the team:
+To see messages from the team (use after_id to only get NEW messages since your last poll):
 ` + "```bash" + `
-curl -s %s/api/tasks/%s/messages | jq '.messages[] | select(.msg_type=="message")'
+# First poll (get all):
+curl -s '%s/api/tasks/%s/messages' | jq '.messages[] | select(.msg_type=="message")'
+# Subsequent polls (only new messages — replace LAST_ID with the highest id you saw):
+# curl -s '%s/api/tasks/%s/messages?after_id=LAST_ID' | jq '.messages[]'
 ` + "```" + `
 
 ### Reading context from completed agents
@@ -172,7 +175,7 @@ Check .klaudio/context/ for summaries from agents that completed before you.
 - When you find a critical issue or blocker
 - When you complete a significant milestone
 - When you change something that affects other agents
-`, apiURL, taskID, subtaskID, apiURL, taskID)
+`, apiURL, taskID, subtaskID, apiURL, taskID, apiURL, taskID)
 }
 
 // RespawnRequest represents a manager's request to respawn a worker with fix instructions.
