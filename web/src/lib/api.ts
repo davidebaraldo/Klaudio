@@ -451,3 +451,21 @@ export interface TaskStats {
 export function getTaskStats(taskId: string) {
 	return request<TaskStats>(`/tasks/${taskId}/stats`);
 }
+
+// ---- Rate Limit ----
+
+export interface RateLimitState {
+	agent_id: string;
+	task_id: string;
+	is_limited: boolean;
+	retry_in_seconds: number;
+	attempt: number;
+	max_retries: number;
+	message: string;
+	reset_at: string;
+	detected_at: string;
+}
+
+export function getRateLimitStatus(taskId: string) {
+	return request<{ task_id: string; agents: RateLimitState[] }>(`/tasks/${taskId}/rate-limit`);
+}

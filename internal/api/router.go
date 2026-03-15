@@ -15,20 +15,22 @@ import (
 	"github.com/klaudio-ai/klaudio/internal/docker"
 	"github.com/klaudio-ai/klaudio/internal/embedded"
 	"github.com/klaudio-ai/klaudio/internal/files"
+	"github.com/klaudio-ai/klaudio/internal/ratelimit"
 	"github.com/klaudio-ai/klaudio/internal/stream"
 	"github.com/klaudio-ai/klaudio/internal/task"
 )
 
 // Services bundles all dependencies needed by HTTP handlers.
 type Services struct {
-	DB          *db.DB
-	Docker      *docker.Manager
-	Config      *config.Config
-	StreamHub   *stream.Hub
-	MessageBus  *stream.MessageBus
-	TaskManager *task.TaskManager
-	FileManager *files.Manager
-	Pool        *agent.Pool
+	DB               *db.DB
+	Docker           *docker.Manager
+	Config           *config.Config
+	StreamHub        *stream.Hub
+	MessageBus       *stream.MessageBus
+	TaskManager      *task.TaskManager
+	FileManager      *files.Manager
+	Pool             *agent.Pool
+	RateLimitTracker *ratelimit.Tracker
 }
 
 // NewRouter creates the Chi router with all middleware and route definitions.
@@ -108,6 +110,9 @@ func NewRouter(cfg *config.Config, svc *Services) chi.Router {
 
 			// Container stats
 			r.Get("/{taskID}/stats", h.GetTaskStats)
+
+			// Rate limit status
+			r.Get("/{taskID}/rate-limit", h.GetRateLimitStatus)
 		})
 
 		// Phase 3 — WebSocket streaming (no middleware timeout for long-lived connections)

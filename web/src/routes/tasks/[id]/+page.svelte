@@ -23,6 +23,7 @@
 	import AgentComms from '$lib/components/AgentComms.svelte';
 	import AgentGrid from '$lib/components/AgentGrid.svelte';
 	import StatsPanel from '$lib/components/StatsPanel.svelte';
+	import RateLimitBanner from '$lib/components/RateLimitBanner.svelte';
 
 	const { data } = $props();
 
@@ -285,6 +286,11 @@
 					<TruncatedText text={task.error} maxLength={500} title="Task Error Details" preformatted />
 				</div>
 			</div>
+		{/if}
+
+		<!-- Rate limit banner -->
+		{#if task.status === 'running' || task.status === 'planning'}
+			<RateLimitBanner taskId={data.taskId} {wsEvents} />
 		{/if}
 
 		<!-- Relaunch panel -->
