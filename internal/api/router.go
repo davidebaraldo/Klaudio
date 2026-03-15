@@ -113,6 +113,7 @@ func NewRouter(cfg *config.Config, svc *Services) chi.Router {
 			r.Get("/", h.ListTeamTemplates)
 			r.Post("/", h.CreateTeamTemplate)
 			r.Get("/{templateID}", h.GetTeamTemplate)
+			r.Put("/{templateID}", h.UpdateTeamTemplate)
 			r.Delete("/{templateID}", h.DeleteTeamTemplate)
 		})
 
@@ -132,6 +133,7 @@ func NewRouter(cfg *config.Config, svc *Services) chi.Router {
 		// Config endpoints
 		r.Route("/config", func(r chi.Router) {
 			r.Get("/", h.GetConfig)
+			r.Put("/", h.UpdateConfig)
 		})
 	})
 

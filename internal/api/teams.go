@@ -135,6 +135,77 @@ func (h *Handlers) GetTeamTemplate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, teamTemplateToResponse(tt))
 }
 
+// UpdateTeamTemplate handles PUT /api/team-templates/{templateID}.
+func (h *Handlers) UpdateTeamTemplate(w http.ResponseWriter, r *http.Request) {
+	templateID := chi.URLParam(r, "templateID")
+	if templateID == "" {
+		writeError(w, http.StatusBadRequest, "templateID is required")
+		return
+	}
+
+	existing, err := h.svc.DB.GetTeamTemplate(r.Context(), templateID)
+	if err != nil {
+		slog.Error("failed to get team template for update", "template_id", templateID, "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to retrieve team template")
+		return
+	}
+	if existing == nil {
+		writeError(w, http.StatusNotFound, "team template not found")
+		return
+	}
+
+	var req TeamTemplateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		return
+	}
+
+	if req.Name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	if req.MaxAgents <= 0 {
+		req.MaxAgents = 3
+	}
+
+	rolesStr := "[]"
+	if len(req.Roles) > 0 {
+		var roles []db.TeamRole
+		if err := json.Unmarshal(req.Roles, &roles); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid roles: "+err.Error())
+			return
+		}
+		rolesStr = string(req.Roles)
+	}
+
+	mode := req.Mode
+	if mode != "collaborative" {
+		mode = "sequential"
+	}
+
+	existing.Name = req.Name
+	existing.Description = req.Description
+	existing.MaxAgents = req.MaxAgents
+	existing.Review = req.Review
+	existing.Roles = rolesStr
+	existing.Mode = mode
+	existing.IsDefault = req.IsDefault
+
+	if err := h.svc.DB.UpdateTeamTemplate(r.Context(), existing); err != nil {
+		slog.Error("failed to update team template", "template_id", templateID, "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to update team template")
+		return
+	}
+
+	updated, err := h.svc.DB.GetTeamTemplate(r.Context(), templateID)
+	if err != nil || updated == nil {
+		writeJSON(w, http.StatusOK, teamTemplateToResponse(existing))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, teamTemplateToResponse(updated))
+}
+
 // DeleteTeamTemplate handles DELETE /api/team-templates/{templateID}.
 func (h *Handlers) DeleteTeamTemplate(w http.ResponseWriter, r *http.Request) {
 	templateID := chi.URLParam(r, "templateID")

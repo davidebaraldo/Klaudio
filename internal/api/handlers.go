@@ -354,7 +354,7 @@ func (h *Handlers) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
-// GetConfig handles GET /api/config. Returns non-sensitive configuration info.
+// GetConfig handles GET /api/config. Returns the full configuration (sensitive fields masked).
 func (h *Handlers) GetConfig(w http.ResponseWriter, r *http.Request) {
 	cfg := h.svc.Config
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -363,17 +363,173 @@ func (h *Handlers) GetConfig(w http.ResponseWriter, r *http.Request) {
 			"host": cfg.Server.Host,
 		},
 		"docker": map[string]interface{}{
-			"image_name": cfg.Docker.ImageName,
-			"network":    cfg.Docker.Network,
-			"max_agents": cfg.Docker.MaxAgents,
+			"host":                cfg.Docker.Host,
+			"image_name":          cfg.Docker.ImageName,
+			"network":             cfg.Docker.Network,
+			"max_agents":          cfg.Docker.MaxAgents,
+			"max_agents_per_task": cfg.Docker.MaxAgentsPerTask,
 		},
 		"claude": map[string]interface{}{
-			"auth_mode": cfg.Claude.AuthMode,
+			"auth_mode":      cfg.Claude.AuthMode,
+			"host_dir":       cfg.Claude.HostDir,
+			"host_json_file": cfg.Claude.HostJsonFile,
+			"has_session_key": cfg.Claude.SessionKey != "",
 		},
 		"database": map[string]interface{}{
 			"path": cfg.Database.Path,
 		},
+		"storage": map[string]interface{}{
+			"data_dir":   cfg.Storage.DataDir,
+			"states_dir": cfg.Storage.StatesDir,
+			"files_dir":  cfg.Storage.FilesDir,
+		},
+		"state": map[string]interface{}{
+			"auto_save_enabled":  cfg.State.AutoSaveEnabled,
+			"auto_save_interval": cfg.State.AutoSaveInterval.String(),
+			"max_checkpoints":    cfg.State.MaxCheckpoints,
+			"retention_days":     cfg.State.RetentionDays,
+		},
 	})
+}
+
+// UpdateConfigRequest is the JSON body for PUT /api/config.
+type UpdateConfigRequest struct {
+	Server  *ServerConfigUpdate  `json:"server,omitempty"`
+	Docker  *DockerConfigUpdate  `json:"docker,omitempty"`
+	Claude  *ClaudeConfigUpdate  `json:"claude,omitempty"`
+	Storage *StorageConfigUpdate `json:"storage,omitempty"`
+	State   *StateConfigUpdate   `json:"state,omitempty"`
+}
+
+type ServerConfigUpdate struct {
+	Port *int    `json:"port,omitempty"`
+	Host *string `json:"host,omitempty"`
+}
+
+type DockerConfigUpdate struct {
+	Host             *string `json:"host,omitempty"`
+	ImageName        *string `json:"image_name,omitempty"`
+	Network          *string `json:"network,omitempty"`
+	MaxAgents        *int    `json:"max_agents,omitempty"`
+	MaxAgentsPerTask *int    `json:"max_agents_per_task,omitempty"`
+}
+
+type ClaudeConfigUpdate struct {
+	AuthMode   *string `json:"auth_mode,omitempty"`
+	HostDir    *string `json:"host_dir,omitempty"`
+	SessionKey *string `json:"session_key,omitempty"`
+}
+
+type StorageConfigUpdate struct {
+	DataDir   *string `json:"data_dir,omitempty"`
+	StatesDir *string `json:"states_dir,omitempty"`
+	FilesDir  *string `json:"files_dir,omitempty"`
+}
+
+type StateConfigUpdate struct {
+	AutoSaveEnabled  *bool   `json:"auto_save_enabled,omitempty"`
+	AutoSaveInterval *string `json:"auto_save_interval,omitempty"`
+	MaxCheckpoints   *int    `json:"max_checkpoints,omitempty"`
+	RetentionDays    *int    `json:"retention_days,omitempty"`
+}
+
+// UpdateConfig handles PUT /api/config. Updates runtime config and persists to YAML.
+func (h *Handlers) UpdateConfig(w http.ResponseWriter, r *http.Request) {
+	var req UpdateConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		return
+	}
+
+	cfg := h.svc.Config
+
+	// Apply server updates
+	if req.Server != nil {
+		if req.Server.Port != nil {
+			cfg.Server.Port = *req.Server.Port
+		}
+		if req.Server.Host != nil {
+			cfg.Server.Host = *req.Server.Host
+		}
+	}
+
+	// Apply docker updates
+	if req.Docker != nil {
+		if req.Docker.Host != nil {
+			cfg.Docker.Host = *req.Docker.Host
+		}
+		if req.Docker.ImageName != nil {
+			cfg.Docker.ImageName = *req.Docker.ImageName
+		}
+		if req.Docker.Network != nil {
+			cfg.Docker.Network = *req.Docker.Network
+		}
+		if req.Docker.MaxAgents != nil {
+			cfg.Docker.MaxAgents = *req.Docker.MaxAgents
+		}
+		if req.Docker.MaxAgentsPerTask != nil {
+			cfg.Docker.MaxAgentsPerTask = *req.Docker.MaxAgentsPerTask
+		}
+	}
+
+	// Apply claude updates
+	if req.Claude != nil {
+		if req.Claude.AuthMode != nil {
+			cfg.Claude.AuthMode = *req.Claude.AuthMode
+		}
+		if req.Claude.HostDir != nil {
+			cfg.Claude.HostDir = *req.Claude.HostDir
+		}
+		if req.Claude.SessionKey != nil {
+			cfg.Claude.SessionKey = *req.Claude.SessionKey
+		}
+	}
+
+	// Apply storage updates
+	if req.Storage != nil {
+		if req.Storage.DataDir != nil {
+			cfg.Storage.DataDir = *req.Storage.DataDir
+		}
+		if req.Storage.StatesDir != nil {
+			cfg.Storage.StatesDir = *req.Storage.StatesDir
+		}
+		if req.Storage.FilesDir != nil {
+			cfg.Storage.FilesDir = *req.Storage.FilesDir
+		}
+	}
+
+	// Apply state updates
+	if req.State != nil {
+		if req.State.AutoSaveEnabled != nil {
+			cfg.State.AutoSaveEnabled = *req.State.AutoSaveEnabled
+		}
+		if req.State.AutoSaveInterval != nil {
+			if d, err := time.ParseDuration(*req.State.AutoSaveInterval); err == nil {
+				cfg.State.AutoSaveInterval = d
+			} else {
+				writeError(w, http.StatusBadRequest, "invalid auto_save_interval: "+err.Error())
+				return
+			}
+		}
+		if req.State.MaxCheckpoints != nil {
+			cfg.State.MaxCheckpoints = *req.State.MaxCheckpoints
+		}
+		if req.State.RetentionDays != nil {
+			cfg.State.RetentionDays = *req.State.RetentionDays
+		}
+	}
+
+	// Save to disk
+	if err := cfg.Save(); err != nil {
+		slog.Error("failed to save config", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to save config: "+err.Error())
+		return
+	}
+
+	slog.Info("configuration updated and saved", "path", cfg.FilePath)
+
+	// Return updated config (re-use GetConfig logic)
+	h.GetConfig(w, r)
 }
 
 // runTask executes the full lifecycle of a task: create container, run, collect output.

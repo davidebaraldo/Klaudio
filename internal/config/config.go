@@ -19,6 +19,9 @@ type Config struct {
 	Database DatabaseConfig `yaml:"database"`
 	Storage  StorageConfig  `yaml:"storage"`
 	State    StateConfig    `yaml:"state"`
+
+	// FilePath is the path to the YAML config file (not serialized).
+	FilePath string `yaml:"-"`
 }
 
 // StateConfig holds checkpoint and auto-save settings.
@@ -89,6 +92,7 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("config validation: %w", err)
 	}
 
+	cfg.FilePath = path
 	return cfg, nil
 }
 
@@ -240,6 +244,24 @@ func (c *Config) validate() error {
 	}
 	if c.Database.Path == "" {
 		return fmt.Errorf("database.path is required")
+	}
+	return nil
+}
+
+// Save writes the current configuration to the YAML file at FilePath.
+// If FilePath is empty, it returns an error.
+func (c *Config) Save() error {
+	if c.FilePath == "" {
+		return fmt.Errorf("config file path is not set")
+	}
+
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("marshaling config: %w", err)
+	}
+
+	if err := os.WriteFile(c.FilePath, data, 0o644); err != nil {
+		return fmt.Errorf("writing config file %s: %w", c.FilePath, err)
 	}
 	return nil
 }
